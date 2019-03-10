@@ -21,10 +21,18 @@
 	
 	
 	This revision:
-		- remove old state control code
-		- handle new elevetor states with switch statement
-		- introduce key modes and modesets
-		- attempt to separate keypad from elevator related code
+		- add shift register support to introduce light switch functionality
+		  The shift register will drive bistable relays. 
+		  The principles of control:
+		  - 16 shift register outputs select relays to be energized
+		  - Two polarity lines identify if energizing turns relays ON or OFF
+		    POLARITY_ON_PIN - LOW: turn selected relays ON
+			POLARITY_OFF_PIN - LOW: turn selected relays OFF
+		    only one polarity line can be LOW at any given time!
+		  - Energize impulse lasts limited time (tenths of millis)
+		  - Just one of the 16 relays to be energized at once, to minimize
+		    current consumption
+		    This requires introduction of relay queues: value[], bit_num[]
 	
 *************************************************************************/
 
@@ -32,8 +40,18 @@
 
 // How many leds in your strip?
 #define NUM_LEDS 13
-#define NUM_KEYS 13
+#define NUM_KEYS 23  // 10 virtual keys (with shift)
 #define NUM_FLOORS 11
+
+
+// Serial to parallel shift register 74hc595
+#define SHIFT_CLOCK_PIN  A4  // rising edge active
+#define SHIFT_LATCH_PIN  A6  // L - block, H - show
+#define SHIFT_DATA_PIN   10
+
+// relays polarity
+#define POLARITY_ON_PIN    11  // L - active
+#define POLARITY_OFF_PIN   13  // L - active
 
 // For led chips like Neopixels, which have a data line, ground, and power, you just
 // need to define DATA_PIN.  For led chipsets that are SPI based (four wires - data, clock,
@@ -63,7 +81,7 @@ int blink_countdown = 0;
 #define COL_3   A1
 #define COL_4   A2
 
-#define NUM_MODESETS  4  // 0 - lift, 1 - switches 1, 2 - switches 2
+#define NUM_MODESETS  5  // 0 - lift, 1,2,3 - switches, 4 - lift stop
 
 // map keypad number to number in the LED chain
 char keymap[NUM_KEYS] = {7, 6, 8, 5, 9, 4, 10, 3, 11, 2, 12, 1, 0};
@@ -106,6 +124,12 @@ char ff;
 char modeset_num;
 
 void setup() {
+      pinMode(SHIFT_CLOCK_PIN, OUTPUT);
+      pinMode(SHIFT_LATCH_PIN, OUTPUT);
+      pinMode(SHIFT_DATA_PIN, OUTPUT);
+      pinMode(POLARITY_ON_PIN, OUTPUT);
+      pinMode(POLARITY_OFF_PIN, OUTPUT);
+  
       pinMode(ROW_1, INPUT); // only one row at a time will be switched to output
       pinMode(ROW_2, INPUT);
       pinMode(ROW_3, INPUT);
@@ -295,13 +319,16 @@ unsigned long modeset[NUM_MODESETS][5] =
 {{4, CRGB::Red, CRGB::Yellow, CRGB::Green, CRGB::Blue},   // func keys
  {2, CRGB::Black, CRGB::Yellow},              // switches
  {2, CRGB::Black, CRGB::Green},              // switches
- {2, CRGB::Black, CRGB::Blue}};              // switches
+ {2, CRGB::Black, CRGB::Blue},              // switches
+ {1, CRGB::Black}};            // Floor STOP key
  
 #define MODESET_FUNCKEYS      0
 #define MODESET_SWITCHES_1    1
 #define MODESET_SWITCHES_2    2
 #define MODESET_SWITCHES_3    3
+#define MODESET_FLOOR_STOP    4
 
+// set key to next color in given modeset
 void switch_mode(char key_num, char modeset_num) {
   if(mode[modeset_num][key_num] < modeset[modeset_num][0]-1) 
     mode[modeset_num][key_num]++;
@@ -313,26 +340,23 @@ void switch_mode_while_visible(char key_num, char modeset_num) {
   if(last_key[key_num] != key[key_num]) // just pressed
     if(key_countdown[key_num] > 0) { // and did not sleep at the moment
       switch_mode(key_num, modeset_num);
+
+      // Update queue of shift register pins events
+      if(key_num > 0 && key_num <= 10) {  // number keys only
+        if(mode[modeset_num][key_num])
+          add_to_queue(mode[modeset_num][0] * 10 + key_num-1, 300, 1, 1, 1); // bit_num, duration, exclusive, polarity, energize
+        else
+          add_to_queue(mode[modeset_num][0] * 10 + key_num-1, 300, 1, 0, 1);
+      }
+      
     }
 }
+// set range of keys to next color in given modeset
 void manage_key_mode(char from_key, char to_key, char modeset_num) {
   for(key_num=from_key; key_num<=to_key; key_num++) {
     if(key[key_num])
       switch_mode_while_visible(key_num, modeset_num);
   }
-}
-
-void display_debug_2() {
-    // debug display - mark state and dir on the keypad
-    if(state == DOOR_OPEN)
-      leds[keymap[0]] = CRGB::Green;
-      
-    if(dir == -1)
-      leds[keymap[1]] = CRGB::Green;
-    else if(dir == 0)
-      leds[keymap[2]] = CRGB::Green;
-    else
-      leds[keymap[3]] = CRGB::Green;
 }
 
 void display_based_on_floor(char from_key, char to_key) {
@@ -370,14 +394,178 @@ void dim_turned_off_by_group(char driver_key_mode, char from_key, char to_key) {
           leds[keymap[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]];
       }
       else
-          leds[keymap[key_num]].setRGB(modeset[modeset_num][mode[modeset_num][key_num]].r / 2,
-                                       modeset[modeset_num][mode[modeset_num][key_num]].g / 2,
-                                       modeset[modeset_num][mode[modeset_num][key_num]].b / 2);
+          leds[keymap[key_num]].setRGB(((CRGB)modeset[modeset_num][mode[modeset_num][key_num]]).r / 2,
+                                       ((CRGB)modeset[modeset_num][mode[modeset_num][key_num]]).g / 2,
+                                       ((CRGB)modeset[modeset_num][mode[modeset_num][key_num]]).b / 2);
     }  
 }
 
+
+
+
+void send_to_sr(int data) {
+  digitalWrite(SHIFT_LATCH_PIN, LOW);
+  /*
+  for(unsigned char ff = 0; ff<16; ff++) {
+    digitalWrite(SHIFT_CLOCK_PIN, LOW);
+    digitalWrite(SHIFT_DATA_PIN, (data & 1));
+    digitalWrite(SHIFT_CLOCK_PIN, HIGH);
+    data >>= 1;
+  }
+  */
+  shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, data);
+  shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, (data >> 8));
+  digitalWrite(SHIFT_LATCH_PIN, HIGH);
+}
+
+// queue buffers
+#define MAX_QUEUE 8
+int duration[MAX_QUEUE];
+unsigned char value[MAX_QUEUE] = {0};  // bit 2 - exclusive, bit 1 - polarity, bit 0 - energize
+unsigned char bit_num[MAX_QUEUE];
+unsigned char queue_start = 0;
+unsigned char queue_end = queue_start;
+
+// output buffer for shift register
+int sr_data = 0x0000;
+
+// set polarity and single pin in shift register (sr)
+void set_sr_output_pin(int bit_num, char polarity, char energize) {
+  int mask = 1;
+  // set polarity pin only if changed
+  static char last_polarity;
+  polarity = polarity > 0;
+  if(polarity != last_polarity) {
+    // turn off both polarity pins to avoid both ON
+    digitalWrite(POLARITY_ON_PIN, HIGH);
+    digitalWrite(POLARITY_OFF_PIN, HIGH);
+    // turn on single one
+    if(polarity)
+      digitalWrite(POLARITY_ON_PIN, LOW);
+    else
+      digitalWrite(POLARITY_OFF_PIN, LOW);
+    last_polarity = (polarity > 0);
+  }
+
+  // set shift register data
+  if(energize > 0) {
+    sr_data = sr_data | (mask << bit_num);  // move single 1 num bits
+  }
+  else {
+    sr_data = sr_data & (0xffff ^ (mask << bit_num)); // move single 1 num bits and invert all
+    sr_data = 0;
+  }
+  send_to_sr(sr_data);
+}
+
+// >0 - energize or deenergize it and countdown
+// 0 - deenergize it and remove
+// <0 - energize or deenergize and remove
+void process_queue_tick() {
+  //for(unsigned char ff = queue_start; ff < MAX_QUEUE; ff++) 
+  unsigned char ff = queue_start;
+  unsigned char excl = 0;
+  while ((ff != queue_end) && !excl) {
+    if(duration[ff]) {
+      // nonzero duration - process it
+      excl = ((4 & value[ff]) > 0);
+      if(excl && (ff == queue_start) ||  // do exclusive bits only if first in queue
+        !excl) {             // nonexclusive are always fine
+
+        // avoid repeating sending sr data
+        if(8 & value[ff]) {
+          set_sr_output_pin(bit_num[ff], 2 & value[ff], 1 & value[ff]);
+          value[ff] &= 0xF7; // 11110111 - clear init bit
+        }
+        
+        if(duration[ff] > 0)
+        {
+          duration[ff]--; // countdown
+        }
+      }
+    }
+    if(duration[ff] == 0) {
+      set_sr_output_pin(bit_num[ff], 0, 0);  // deenergize
+    }
+    
+    ff++;
+    if(ff == MAX_QUEUE)
+      ff = 0;
+  }
+}
+void clean_queue() {
+  unsigned char excl = 0;
+  while (queue_start != queue_end && !excl) {
+    excl = ((4 & value[queue_start]) > 0);
+    if(duration[queue_start] <= 0) {
+      bit_num[queue_start] = 0;
+      duration[queue_start] = 0;
+      value[queue_start] = 0;
+      excl = 0;
+    }
+    if(excl == 0) {
+      queue_start++;
+      if(queue_start == MAX_QUEUE)
+        queue_start = 0;
+    }
+  }
+}
+
+int add_to_queue(char new_bit_num, int new_duration, char exclusive, char polarity, char energize) {
+  if(queue_end < MAX_QUEUE - 1 && queue_end != queue_start -1 ||
+     queue_end == MAX_QUEUE - 1 && queue_start != 0) {
+    bit_num[queue_end] = new_bit_num;
+    duration[queue_end] = new_duration;
+    // bit 3 (val 8) indicates initialization
+    value[queue_end] = 8 + ((exclusive > 0) << 2) + ((polarity > 0) << 1) + (energize > 0);
+
+    queue_end++;
+    if(queue_end == MAX_QUEUE)
+      queue_end = 0;
+  }
+}
+
+
+
+
+
+void display_debug_2() {
+    // debug display - mark state and dir on the keypad
+    /*
+    if(state == DOOR_OPEN)
+      leds[keymap[0]] = CRGB::Green;
+      
+    if(dir == -1)
+      leds[keymap[1]] = CRGB::Green;
+    else if(dir == 0)
+      leds[keymap[2]] = CRGB::Green;
+    else
+      leds[keymap[3]] = CRGB::Green;
+    */
+
+    
+    unsigned char dd = 0;
+    for (unsigned char ff=0; ff < MAX_QUEUE; ff++) {
+      if(duration[ff] > 0)
+        dd++;
+    }
+    leds[keymap[dd]] = CRGB::Blue;
+    
+    leds[keymap[queue_start]] = CRGB::Green;
+    leds[keymap[queue_end]] = CRGB::Red;
+}
+
+
+
+
 void loop() {
 
+  // process switch event queue
+  process_queue_tick();
+  clean_queue();
+  //send_to_sr(0xff00);
+  
+  
   // aktualizuj target podczas ruchu w dana strone
   /*
   if(target_floor != curr_floor) {
@@ -558,7 +746,7 @@ void loop() {
     switch_mode_while_visible(12, MODESET_FUNCKEYS);
     // DEBUG DISPLAY for key 12
     display_debug_2();
-  } 
+  }
   else {
     // REGULAR DISPLAY
     if(mode[0][12] == 0) {
@@ -573,6 +761,10 @@ void loop() {
       }
       display_based_on_floor(0, 10);
       // uses: curr_floor, blink_state, sleep_countdown, blink_countdown, leds[], keymap[], floors[]
+
+      // handle STOP key (11)
+      manage_key_mode(11, 11, MODESET_FLOOR_STOP);  // from key, to key, mode set
+      display_based_on_mode(11, 11, MODESET_FLOOR_STOP);
     }
     else
     if(mode[0][12] == 1) {
@@ -589,7 +781,7 @@ void loop() {
     if(mode[0][12] == 3) {
       manage_key_mode(0, 11, MODESET_SWITCHES_3);
       display_based_on_mode(0, 11, MODESET_SWITCHES_3);
-      dim_turned_off_by_group(mode[mode[0][12]][11], 0, 10);
+      //dim_turned_off_by_group(mode[mode[0][12]][11], 0, 10);
     }
   } //else debug
 
