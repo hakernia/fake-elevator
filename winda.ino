@@ -21,7 +21,10 @@
 	
 	
 	This revision:
-		- introduce advanced elevator state contol
+		- remove old state control code
+		- handle new elevetor states with switch statement
+		- introduce key modes and modesets
+		- attempt to separate keypad from elevator related code
 	
 *************************************************************************/
 
@@ -38,6 +41,17 @@
 #define DATA_PIN 3
 #define CLOCK_PIN 13
 
+// Define the array of leds
+CRGB leds[NUM_LEDS];
+
+// LED related declarations
+#define BLINK_TIME  500
+char blink_state = 0;
+int blink_countdown = 0;
+
+
+// KEYPAD related declarations
+// keyboard matrix definition
 // ROWS act as outputs
 #define ROW_1   2
 #define ROW_2   4
@@ -49,14 +63,50 @@
 #define COL_3   A1
 #define COL_4   A2
 
-// Define the array of leds
-CRGB leds[NUM_LEDS];
-char keymap[NUM_KEYS] = {7, 6, 8, 5, 9, 4, 10, 3, 11, 2, 12, 1, 0};
-char ff;
+#define NUM_MODESETS  4  // 0 - lift, 1 - switches 1, 2 - switches 2
 
+// map keypad number to number in the LED chain
+char keymap[NUM_KEYS] = {7, 6, 8, 5, 9, 4, 10, 3, 11, 2, 12, 1, 0};
+char mode[NUM_MODESETS][NUM_KEYS];
+char key[NUM_KEYS];      // 0 - released, 1 - pressed
+char last_key[NUM_KEYS]; // last state of key; used to detect a change
+#define MAX_KEY_COUNTDOWN  3000
+int key_countdown[NUM_KEYS];  // indicating time after key was pressed
+char key_num;
+char key_pressed;
+#define SLEEP_TIME  5000
+long sleep_countdown = 0;
+
+
+// LIFT related declarations
+#define RESTART_THIS_STATE 0  // set last_state to this one to pretend the state has changed even if it has not
+#define LIFT_STOPPING  1
+#define LIFT_STOPPED   2
+#define DOOR_OPENING   3
+#define DOOR_OPEN      4
+#define DOOR_CLOSING   5
+#define DOOR_CLOSED    6
+#define LIFT_STARTING  7
+#define LIFT_RUNNING_UP 8
+#define LIFT_RUNNING_DOWN 9
+
+char state = DOOR_OPEN;
+char last_state = RESTART_THIS_STATE;
+int state_countdown = 0;
+
+
+// FLOOR related declarations
+char curr_floor = 0;
+char target_floor = 0;
+int dir = 1;
+char floors[NUM_KEYS];
+
+
+char ff;
+char modeset_num;
 
 void setup() {
-      pinMode(ROW_1, INPUT);
+      pinMode(ROW_1, INPUT); // only one row at a time will be switched to output
       pinMode(ROW_2, INPUT);
       pinMode(ROW_3, INPUT);
       pinMode(ROW_4, INPUT);
@@ -97,22 +147,28 @@ void setup() {
       // FastLED.addLeds<APA102, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
       // FastLED.addLeds<DOTSTAR, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
 
-      for(ff=0; ff< NUM_LEDS; ff++) {
+      // initialize each key's mode
+      for(modeset_num=0; modeset_num < NUM_MODESETS; modeset_num++)
+      for(key_num=0; key_num<NUM_KEYS; key_num++) {
+        mode[modeset_num][key_num] = 0;
+      }
+      
+      // blink all LEDs to indicate the program start
+      for(ff=0; ff<NUM_LEDS; ff++) {
         leds[ff] = CRGB::White;
       }
-  FastLED.show();
+      for(ff=0; ff<NUM_KEYS; ff++) {
+        key_countdown[ff] = MAX_KEY_COUNTDOWN;
+      }
+      FastLED.show();
       delay(1000);
       for(ff=0; ff< NUM_LEDS; ff++) {
         leds[ff] = CRGB::Black;
       }
-  FastLED.show();
+      FastLED.show();
 }
 
 
-char key[NUM_KEYS];
-char last_key[NUM_KEYS]; // last state of key
-#define MAX_KEY_COUNTDOWN  3000
-int key_countdown[NUM_KEYS];
 
 void readKbd() {
   // Rows are strobed by pinMode and not digitalWrite
@@ -203,121 +259,280 @@ void readKbd() {
   //digitalWrite(ROW_4, HIGH);
 }
 
-void countdownKbd() {
-  char ff;
-  for(ff=0; ff<NUM_KEYS; ff++)
-    if(key[ff] != last_key[ff])
-      key_countdown[ff] = MAX_KEY_COUNTDOWN;
+// actualize each key's key_countdown
+void countdownKbd(char from_key, char to_key) {
+  char key_num;
+  for(key_num=from_key; key_num<=to_key; key_num++)
+    if(key[key_num] != last_key[key_num])
+      key_countdown[key_num] = MAX_KEY_COUNTDOWN;
     else
-      if(key_countdown[ff] > 0)
-        key_countdown[ff]--;
+      if(key_countdown[key_num] > 0)
+        key_countdown[key_num]--;
 }
 
 
-#define RUN_FLOOR_DELAY  1000
-#define STOP_FLOOR_DELAY 1000  // 1000
-#define WINDA_STOI  0
-#define WINDA_JEDZIE  1
-#define BLINK_TIME  500
-#define SLEEP_TIME  5000
-char blink_state = 0;
-int blink_countdown = 0;
-long sleep_countdown = 0;
-int countdown = 0;
-char key_pressed = false;
-char state = WINDA_JEDZIE;
-int dir = 1;
-char cur_pietro = 0;
-char pietro[NUM_KEYS];
 
-char mode = 0;
-void switch_mode() {
-  if(mode < 2) mode++;
-  else mode = 0;
+
+
+// Has any floor been called below current one
+char is_below(char curr_floor) {
+  for(ff=curr_floor-1; ff>=0; ff--)
+    if(floors[ff] > 0)
+       return ff;
+  return -1;
+}
+// Has any floor been called above current one
+char is_above(char curr_floor) {
+  for(ff=curr_floor+1; ff<NUM_FLOORS; ff++)
+    if(floors[ff] > 0)
+       return ff;
+  return -1;
 }
 
-char is_below(char cur_pietro) {
-  for(ff=cur_pietro-1; ff>=0; ff--)
-    if(pietro[ff] > 0)
-       return true;
-  return false;
-}
-char is_above(char cur_pietro) {
-  for(ff=cur_pietro+1; ff<NUM_FLOORS; ff++)
-    if(pietro[ff] > 0)
-       return true;
-  return false;
-}
 
-void loop() { 
-/*
-  switch(state) {
-    case LIFT_STOPPING:
-      
-    case LIFT_STOPPED:
-    case DOOR_OPENING:
-    case DOOR_OPEN:
-    case DOOR_CLOSING:
-    case DOOR_CLOSED:
-    case LIFT_STARTING:
-    case LIFT_RUNNING_UP:
-    case LIFT_RUNNING_DOWN:
+// manage key modes
+unsigned long modeset[NUM_MODESETS][5] =
+{{4, CRGB::Red, CRGB::Yellow, CRGB::Green, CRGB::Blue},   // func keys
+ {2, CRGB::Black, CRGB::Yellow},              // switches
+ {2, CRGB::Black, CRGB::Green},              // switches
+ {2, CRGB::Black, CRGB::Blue}};              // switches
+ 
+#define MODESET_FUNCKEYS      0
+#define MODESET_SWITCHES_1    1
+#define MODESET_SWITCHES_2    2
+#define MODESET_SWITCHES_3    3
+
+void switch_mode(char key_num, char modeset_num) {
+  if(mode[modeset_num][key_num] < modeset[modeset_num][0]-1) 
+    mode[modeset_num][key_num]++;
+  else 
+    mode[modeset_num][key_num] = 0;
+}
+void switch_mode_while_visible(char key_num, char modeset_num) {
+  // Switch mode only if pressed while lit.
+  if(last_key[key_num] != key[key_num]) // just pressed
+    if(key_countdown[key_num] > 0) { // and did not sleep at the moment
+      switch_mode(key_num, modeset_num);
+    }
+}
+void manage_key_mode(char from_key, char to_key, char modeset_num) {
+  for(key_num=from_key; key_num<=to_key; key_num++) {
+    if(key[key_num])
+      switch_mode_while_visible(key_num, modeset_num);
   }
-*/
-  // MOVE
-  if(countdown)
-    countdown--;
-  else {
-//    if(dir == 0)
-//        state = WINDA_STOI;
-//    if(state==WINDA_STOI) {
-      // w koncu rusza
-      if(dir == -1) {
-        if(!is_below(cur_pietro)) {
-          if(is_above(cur_pietro))
-            dir = 1;
-          //else
-          //  dir = 0;
-        }
-      } else 
-      if(dir == 1) {
-        if(!is_above(cur_pietro)) {
-          //if(is_below(cur_pietro))
-            dir = -1;
-         // else
-           // dir = 0;
-        }
-      } else {
-        // dir == 0
-        if(is_above(cur_pietro))
-          dir = 1;
-        else
-          dir = -1;  // go bottom by default
-      }
-//  }
-    if(state == WINDA_JEDZIE)
-      cur_pietro += dir;
-      
-    if(cur_pietro < 0)
-      cur_pietro = 0;
-    if(cur_pietro > NUM_FLOORS)
-      cur_pietro = NUM_FLOORS;
+}
 
-    // arrived to called floor  
-    if(pietro[cur_pietro] > 0) {
-      countdown = 3000 + random(STOP_FLOOR_DELAY);
-      state = WINDA_STOI;
-      pietro[cur_pietro] = 0;
+void display_debug_2() {
+    // debug display - mark state and dir on the keypad
+    if(state == DOOR_OPEN)
+      leds[keymap[0]] = CRGB::Green;
+      
+    if(dir == -1)
+      leds[keymap[1]] = CRGB::Green;
+    else if(dir == 0)
+      leds[keymap[2]] = CRGB::Green;
+    else
+      leds[keymap[3]] = CRGB::Green;
+}
+
+void display_based_on_floor(char from_key, char to_key) {
+  for(key_num=from_key; key_num<=to_key; key_num++)
+    if(key_num == curr_floor) {
+      if(blink_state && sleep_countdown)
+        leds[keymap[key_num]] = CRGB::Red;
+      else
+        leds[keymap[key_num]] = CRGB::Black;
+      if(sleep_countdown)
+        leds[keymap[key_num]] = (((long)blink_countdown * 256) / BLINK_TIME) << 16;
     }
     else {
-      countdown = RUN_FLOOR_DELAY;
-      state = WINDA_JEDZIE;
+      if(floors[key_num] > 0)
+        leds[keymap[key_num]] = CRGB::White;
+      else
+        leds[keymap[key_num]] = CRGB::Black;
+    }
+}
+
+void display_based_on_mode(char from_key, char to_key, char modeset_num) {
+    // lit up the right mode if recently pressed; turn off if slept long 
+    for(key_num=from_key; key_num <= to_key; key_num++) {
+      if(key_countdown[key_num] > 0) {
+          leds[keymap[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]+1];
+      }
+      else
+        leds[keymap[key_num]] = CRGB::Black;
+    }
+}
+
+void dim_turned_off_by_group(char driver_key_mode, char from_key, char to_key) {
+    for(key_num=from_key; key_num <= to_key; key_num++) {
+      if(driver_key_mode == CRGB::Black) {
+          leds[keymap[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]];
+      }
+      else
+          leds[keymap[key_num]].setRGB(modeset[modeset_num][mode[modeset_num][key_num]].r / 2,
+                                       modeset[modeset_num][mode[modeset_num][key_num]].g / 2,
+                                       modeset[modeset_num][mode[modeset_num][key_num]].b / 2);
+    }  
+}
+
+void loop() {
+
+  // aktualizuj target podczas ruchu w dana strone
+  /*
+  if(target_floor != curr_floor) {
+    if(dir == 1)
+      target_floor = is_above(curr_floor);
+    else
+      target_floor = is_below(curr_floor);
+  }
+  else
+  */
+  // znajdz nowy target po osiagnieciu poprzedniego
+  if(true) {
+    if(dir == 1) {
+      if((target_floor = is_above(curr_floor)) == -1) {
+        dir = -1;
+        if((target_floor = is_below(curr_floor)) == -1) {
+          target_floor = curr_floor;  //0;  // go bottom if there is no calls
+        }
+      }
+    }
+    else {
+      if((target_floor = is_below(curr_floor)) == -1) {
+        if((target_floor = is_above(curr_floor)) > -1)
+          dir = 1;
+        else {
+          target_floor = curr_floor;  //0; // go down if there is no calls
+        }
+      }
     }
   }
+
+  switch(state) {
+    case LIFT_STOPPING:
+           if(last_state != state) {
+             last_state = state;
+             state_countdown = 500;  // how long it will be stopping
+           }
+           if(state_countdown == 0) {
+             state = LIFT_STOPPED;
+           }
+           break;
+    case LIFT_STOPPED:
+           if(last_state != state) {
+             last_state = state;
+             state_countdown = 500;  // how long it will stand still after stopping
+           }
+           if(state_countdown == 0) {
+             state = DOOR_OPENING;
+           }
+           break;
+    case DOOR_OPENING:
+           if(last_state != state) {
+             last_state = state;
+             state_countdown = 500;  // how long takes opening the door
+           }
+           if(state_countdown == 0) {
+             state = DOOR_OPEN;
+           }
+           break;
+    case DOOR_OPEN:
+           if(last_state != state) {
+             last_state = state;
+             state_countdown = 500;  // for how long the door is open
+           }
+           if(state_countdown == 0) {
+             if(target_floor != curr_floor)
+               state = DOOR_CLOSING;
+           }
+           break;
+    case DOOR_CLOSING:
+           if(last_state != state) {
+             last_state = state;
+             state_countdown = 500;  // how long takes closing the door
+           }
+           if(state_countdown == 0) {
+             if(target_floor != curr_floor)
+               state = DOOR_CLOSED;
+           }
+           break;
+    case DOOR_CLOSED:
+           if(last_state != state) {
+             last_state = state;
+             state_countdown = 500;  // for how long the lift holds after closing the door before it starts running
+           }
+           if(state_countdown == 0) {
+             if(target_floor != curr_floor)
+               state = LIFT_STARTING;
+           }
+           break;
+    case LIFT_STARTING:
+           if(last_state != state) {
+             last_state = state;
+             state_countdown = 500;  // for how long the lift decides where to go
+           }
+           if(state_countdown == 0) {
+             if(dir > 0)
+               state = LIFT_RUNNING_UP;
+             else
+               state = LIFT_RUNNING_DOWN;
+           }
+           break;
+    case LIFT_RUNNING_UP:
+           if(last_state != state) {
+             last_state = state;
+             //dir = 1;
+             state_countdown = 500;  // for how long the lift goes up one floor
+           }
+           if(state_countdown == 0) {
+             if(curr_floor < NUM_FLOORS)
+               curr_floor++;
+             // arrived to called floor
+             //if(floors[curr_floor] > 0) {
+             if(curr_floor == target_floor) {
+               state = LIFT_STOPPING;
+               floors[curr_floor] = 0;
+             }
+             else {
+               last_state = RESTART_THIS_STATE;
+               state = LIFT_RUNNING_UP;
+             }
+           }
+           break;
+    case LIFT_RUNNING_DOWN:
+           if(last_state != state) {
+             last_state = state;
+             // dir = -1;
+             state_countdown = 500;  // for how long the lift goes down one floor
+           }
+           if(state_countdown == 0) {
+             if(curr_floor > 0)
+               curr_floor--;
+             // arrived to called floor  
+             //if(floors[curr_floor] > 0) {
+             if(curr_floor == target_floor) {
+               state = LIFT_STOPPING;
+               floors[curr_floor] = 0;
+             }
+             else {
+               state = LIFT_RUNNING_DOWN;
+               last_state = RESTART_THIS_STATE;
+             }
+           }
+           break;
+  }
+
+  // MOVE
+  
+  if(state_countdown)
+    state_countdown--;
+
   delay(1);
 
 
-  if(cur_pietro == 0) {
+  // only countdown if target floor is reached (possible idle state)
+  if(curr_floor == target_floor) {
     if(sleep_countdown > 0)
       sleep_countdown--;
   }
@@ -325,96 +540,74 @@ void loop() {
     sleep_countdown = SLEEP_TIME;
 
   
-  countdownKbd();
+  countdownKbd(12, 12);  // fade out just the two "function" keys 
   memcpy(last_key, key, sizeof(last_key));
   readKbd();
-  key_pressed = false;
-  for(ff=0; ff<NUM_KEYS; ff++) {
-    if(key[ff] == 1) {
-        pietro[ff] = 1;
-        key_pressed = true;
-    }
-        /*
-      leds[keymap[ff]] = CRGB::Yellow;
-    else
-      leds[keymap[ff]] = CRGB::Black;
-      */
-  }
 
-
-  if(key[12]) {
-    if(last_key[12] != key[12]) // just pressed
-      if(key_countdown[12] > 0) { // and did not sleep at the moment
-        switch_mode();
-      }
-      
-    if(state == WINDA_JEDZIE)
-      leds[keymap[0]] = CRGB::Green;
-    if(dir == -1)
-      leds[keymap[1]] = CRGB::Green;
-    else if(dir == 0)
-      leds[keymap[2]] = CRGB::Green;
-    else
-      leds[keymap[3]] = CRGB::Green;
+/*
+  if(key[11]) {
+    switch_mode_while_visible(11, mode[0][12]);
+    // DEBUG DISPLAY for key 11
+    // debug display - mark target floor with the LED on the keypad
+    leds[keymap[target_floor]] = CRGB::Green;
   } 
-  
+  else
+*/
+  if(key[12]) {
+    // Switch mode only if pressed while lit.
+    switch_mode_while_visible(12, MODESET_FUNCKEYS);
+    // DEBUG DISPLAY for key 12
+    display_debug_2();
+  } 
   else {
-
-  // DISPLAY
-  for(ff=0; ff<NUM_FLOORS; ff++)
-    if(ff == cur_pietro) {
-      if(blink_state && sleep_countdown)
-        leds[keymap[ff]] = CRGB::Red;
-      else
-        leds[keymap[ff]] = CRGB::Black;
-      if(sleep_countdown)
-        leds[keymap[ff]] = (((long)blink_countdown * 256) / BLINK_TIME) << 16;
-    }
-    else {
-      if(pietro[ff] > 0)
-        leds[keymap[ff]] = CRGB::White;
-      else
-        leds[keymap[ff]] = CRGB::Black;
-    }
-
-  } //debug
-
-
-      if(key_countdown[12] > 0) {
-        switch(mode) {
-          case 0: leds[0] = CRGB::Red;
-            break;
-          case 1: leds[0] = CRGB::Green;
-            break;
-          case 2: leds[0] = CRGB::Blue;
-            break;
+    // REGULAR DISPLAY
+    if(mode[0][12] == 0) {
+      // Lift mode
+      // detect if key_pressed and update floors[]
+      key_pressed = false;
+      for(ff=0; ff<NUM_FLOORS; ff++) {
+        if(key[ff] == 1) {
+            floors[ff] = 1;
+            key_pressed = true;
         }
       }
-      else
-        leds[0] = CRGB::Black;
+      display_based_on_floor(0, 10);
+      // uses: curr_floor, blink_state, sleep_countdown, blink_countdown, leds[], keymap[], floors[]
+    }
+    else
+    if(mode[0][12] == 1) {
+      // Switch/Toggle mode
+      manage_key_mode(0, 11, MODESET_SWITCHES_1);  // from key, to key, mode set
+      display_based_on_mode(0, 11, MODESET_SWITCHES_1);
+    }
+    else
+    if(mode[0][12] == 2) {
+      manage_key_mode(0, 11, MODESET_SWITCHES_2);
+      display_based_on_mode(0, 11, MODESET_SWITCHES_2);
+    }
+    else
+    if(mode[0][12] == 3) {
+      manage_key_mode(0, 11, MODESET_SWITCHES_3);
+      display_based_on_mode(0, 11, MODESET_SWITCHES_3);
+      dim_turned_off_by_group(mode[mode[0][12]][11], 0, 10);
+    }
+  } //else debug
+
+  // DISPLAY key 12
+  //display_based_on_mode(11, 11, mode[0][12]);  // key 12 determines modeset for other keys
+  display_based_on_mode(12, 12, MODESET_FUNCKEYS);
+  // uses: key_num, key_countdown[], mode[][], leds[], keymap[]
 
 
   if(blink_countdown > 0)
     blink_countdown--;
   else {
     blink_countdown = BLINK_TIME;
-    //blink_state = (blink_state * -1) + 1;
     blink_state = blink_state == 0 ? 1 : 0;
   }
 
   if(key_pressed)
     sleep_countdown = SLEEP_TIME;
 
-  
-  // Turn the LED on, then pause
-//  leds[0] = CRGB::Red;
   FastLED.show();
-//  delay(500);
-  // Now turn the LED off, then pause
-//  leds[0] = CRGB::Black;
-//  FastLED.show();
- // delay(100);
-//      leds[0] = CRGB::Red;
-//  delay(100);
-//      leds[0] = CRGB::Black;
 }
