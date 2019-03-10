@@ -20,19 +20,17 @@
     Contact author at hakernia.pl@gmail.com
 	
 	
-	Initial revision:
-	    - use WS2812B LEDs as button light sources with FastLED library
-		- reading buttons using pin mode changes to avoid logic state
-		  clashes when multiple buttons are pressed at once
-		- very basic elevator state contol
-		- started from blink.ino in FastLED library
+	This revision:
+		- introduce advanced elevator state contol
 	
 *************************************************************************/
 
 #include "FastLED.h"
+
 // How many leds in your strip?
 #define NUM_LEDS 13
 #define NUM_KEYS 13
+#define NUM_FLOORS 11
 
 // For led chips like Neopixels, which have a data line, ground, and power, you just
 // need to define DATA_PIN.  For led chipsets that are SPI based (four wires - data, clock,
@@ -40,6 +38,7 @@
 #define DATA_PIN 3
 #define CLOCK_PIN 13
 
+// ROWS act as outputs
 #define ROW_1   2
 #define ROW_2   4
 #define ROW_3   7
@@ -55,7 +54,8 @@ CRGB leds[NUM_LEDS];
 char keymap[NUM_KEYS] = {7, 6, 8, 5, 9, 4, 10, 3, 11, 2, 12, 1, 0};
 char ff;
 
-void setup() { 
+
+void setup() {
       pinMode(ROW_1, INPUT);
       pinMode(ROW_2, INPUT);
       pinMode(ROW_3, INPUT);
@@ -108,8 +108,15 @@ void setup() {
   FastLED.show();
 }
 
+
 char key[NUM_KEYS];
+char last_key[NUM_KEYS]; // last state of key
+#define MAX_KEY_COUNTDOWN  3000
+int key_countdown[NUM_KEYS];
+
 void readKbd() {
+  // Rows are strobed by pinMode and not digitalWrite
+  // so all rows except the selected one are high impedance.
   //digitalWrite(ROW_1, LOW);
   pinMode(ROW_1, OUTPUT);
     if(digitalRead(COL_1) == LOW)
@@ -194,22 +201,41 @@ void readKbd() {
       key[4] = 0;  */
   pinMode(ROW_4, INPUT);
   //digitalWrite(ROW_4, HIGH);
-  
+}
+
+void countdownKbd() {
+  char ff;
+  for(ff=0; ff<NUM_KEYS; ff++)
+    if(key[ff] != last_key[ff])
+      key_countdown[ff] = MAX_KEY_COUNTDOWN;
+    else
+      if(key_countdown[ff] > 0)
+        key_countdown[ff]--;
 }
 
 
 #define RUN_FLOOR_DELAY  1000
-#define STOP_FLOOR_DELAY 10000
+#define STOP_FLOOR_DELAY 1000  // 1000
 #define WINDA_STOI  0
 #define WINDA_JEDZIE  1
 #define BLINK_TIME  500
+#define SLEEP_TIME  5000
 char blink_state = 0;
 int blink_countdown = 0;
+long sleep_countdown = 0;
 int countdown = 0;
-char state = WINDA_STOI;
-char dir = 0;
-char cur_pietro;
+char key_pressed = false;
+char state = WINDA_JEDZIE;
+int dir = 1;
+char cur_pietro = 0;
 char pietro[NUM_KEYS];
+
+char mode = 0;
+void switch_mode() {
+  if(mode < 2) mode++;
+  else mode = 0;
+}
+
 char is_below(char cur_pietro) {
   for(ff=cur_pietro-1; ff>=0; ff--)
     if(pietro[ff] > 0)
@@ -217,34 +243,67 @@ char is_below(char cur_pietro) {
   return false;
 }
 char is_above(char cur_pietro) {
-  for(ff=cur_pietro+1; ff<NUM_KEYS; ff++)
+  for(ff=cur_pietro+1; ff<NUM_FLOORS; ff++)
     if(pietro[ff] > 0)
        return true;
   return false;
 }
 
 void loop() { 
-
+/*
+  switch(state) {
+    case LIFT_STOPPING:
+      
+    case LIFT_STOPPED:
+    case DOOR_OPENING:
+    case DOOR_OPEN:
+    case DOOR_CLOSING:
+    case DOOR_CLOSED:
+    case LIFT_STARTING:
+    case LIFT_RUNNING_UP:
+    case LIFT_RUNNING_DOWN:
+  }
+*/
   // MOVE
   if(countdown)
     countdown--;
   else {
-    if(state==WINDA_STOI) {
+//    if(dir == 0)
+//        state = WINDA_STOI;
+//    if(state==WINDA_STOI) {
       // w koncu rusza
-      if(dir==-1 && !is_below(cur_pietro)) {
-         if(is_above(cur_pietro))
-           dir = 1;
-         else
-           dir = 0;
+      if(dir == -1) {
+        if(!is_below(cur_pietro)) {
+          if(is_above(cur_pietro))
+            dir = 1;
+          //else
+          //  dir = 0;
+        }
       } else 
-      if(dir==1 && !is_above(cur_pietro)) {
-         if(is_below(cur_pietro))
-           dir = -1;
-         else
-           dir = 0;
+      if(dir == 1) {
+        if(!is_above(cur_pietro)) {
+          //if(is_below(cur_pietro))
+            dir = -1;
+         // else
+           // dir = 0;
+        }
+      } else {
+        // dir == 0
+        if(is_above(cur_pietro))
+          dir = 1;
+        else
+          dir = -1;  // go bottom by default
       }
-    }
-    cur_pietro += dir;
+//  }
+    if(state == WINDA_JEDZIE)
+      cur_pietro += dir;
+      
+    if(cur_pietro < 0)
+      cur_pietro = 0;
+    if(cur_pietro > NUM_FLOORS)
+      cur_pietro = NUM_FLOORS;
+
+    // arrived to called floor  
     if(pietro[cur_pietro] > 0) {
       countdown = 3000 + random(STOP_FLOOR_DELAY);
       state = WINDA_STOI;
@@ -257,11 +316,24 @@ void loop() {
   }
   delay(1);
 
+
+  if(cur_pietro == 0) {
+    if(sleep_countdown > 0)
+      sleep_countdown--;
+  }
+  else
+    sleep_countdown = SLEEP_TIME;
+
   
+  countdownKbd();
+  memcpy(last_key, key, sizeof(last_key));
   readKbd();
+  key_pressed = false;
   for(ff=0; ff<NUM_KEYS; ff++) {
-    if(key[ff] == 1) 
-        pietro[keymap[ff]] = 1;
+    if(key[ff] == 1) {
+        pietro[ff] = 1;
+        key_pressed = true;
+    }
         /*
       leds[keymap[ff]] = CRGB::Yellow;
     else
@@ -270,19 +342,56 @@ void loop() {
   }
 
 
+  if(key[12]) {
+    if(last_key[12] != key[12]) // just pressed
+      if(key_countdown[12] > 0) { // and did not sleep at the moment
+        switch_mode();
+      }
+      
+    if(state == WINDA_JEDZIE)
+      leds[keymap[0]] = CRGB::Green;
+    if(dir == -1)
+      leds[keymap[1]] = CRGB::Green;
+    else if(dir == 0)
+      leds[keymap[2]] = CRGB::Green;
+    else
+      leds[keymap[3]] = CRGB::Green;
+  } 
+  
+  else {
+
   // DISPLAY
-  for(ff=0; ff<NUM_KEYS; ff++)
+  for(ff=0; ff<NUM_FLOORS; ff++)
     if(ff == cur_pietro) {
-      if(blink_state)
+      if(blink_state && sleep_countdown)
         leds[keymap[ff]] = CRGB::Red;
       else
         leds[keymap[ff]] = CRGB::Black;
+      if(sleep_countdown)
+        leds[keymap[ff]] = (((long)blink_countdown * 256) / BLINK_TIME) << 16;
     }
-    else
-    if(pietro[ff] > 0)
-      leds[keymap[ff]] = CRGB::White;
-    else
-      leds[keymap[ff]] = CRGB::Black;
+    else {
+      if(pietro[ff] > 0)
+        leds[keymap[ff]] = CRGB::White;
+      else
+        leds[keymap[ff]] = CRGB::Black;
+    }
+
+  } //debug
+
+
+      if(key_countdown[12] > 0) {
+        switch(mode) {
+          case 0: leds[0] = CRGB::Red;
+            break;
+          case 1: leds[0] = CRGB::Green;
+            break;
+          case 2: leds[0] = CRGB::Blue;
+            break;
+        }
+      }
+      else
+        leds[0] = CRGB::Black;
 
 
   if(blink_countdown > 0)
@@ -292,7 +401,10 @@ void loop() {
     //blink_state = (blink_state * -1) + 1;
     blink_state = blink_state == 0 ? 1 : 0;
   }
-    
+
+  if(key_pressed)
+    sleep_countdown = SLEEP_TIME;
+
   
   // Turn the LED on, then pause
 //  leds[0] = CRGB::Red;
@@ -302,7 +414,7 @@ void loop() {
 //  leds[0] = CRGB::Black;
 //  FastLED.show();
  // delay(100);
-      leds[0] = CRGB::Red;
+//      leds[0] = CRGB::Red;
 //  delay(100);
-      leds[0] = CRGB::Black;
+//      leds[0] = CRGB::Black;
 }
