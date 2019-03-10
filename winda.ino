@@ -21,28 +21,35 @@
 	
 	
 	This revision:
-		- add shift register support to introduce light switch functionality
-		  The shift register will drive bistable relays. 
-		  The principles of control:
-		  - 16 shift register outputs select relays to be energized
-		  - Two polarity lines identify if energizing turns relays ON or OFF
-		    POLARITY_ON_PIN - LOW: turn selected relays ON
-			POLARITY_OFF_PIN - LOW: turn selected relays OFF
-		    only one polarity line can be LOW at any given time!
-		  - Energize impulse lasts limited time (tenths of millis)
-		  - Just one of the 16 relays to be energized at once, to minimize
-		    current consumption
-		    This requires introduction of relay queues: value[], bit_num[]
+	  - introduce virtual keys (shift key functionality) 
+	    in order to handle 16 switches with just 10 floor keys
+	  - total virtual keys:
+	    10 floor keys
+		10 floor with "shift" keys
+		P key (the ground floor) works as shift
+		STOP key
+		RING key
 	
 *************************************************************************/
 
 #include "FastLED.h"
 
 // How many leds in your strip?
-#define NUM_LEDS 13
-#define NUM_KEYS 23  // 10 virtual keys (with shift)
-#define NUM_FLOORS 11
+#define NUM_LEDS      13
+#define NUM_PHYS_KEYS 13
+#define NUM_KEYS      23  // 10 virtual keys (with shift)
+#define NUM_FLOORS    11
 
+// virtual keys
+#define KEY_P          0
+#define KEY_DIGIT_MIN  1
+#define KEY_DIGIT_MAX 20
+#define KEY_STOP      21
+#define KEY_BELL      22
+
+#define LED_P      0
+#define LED_STOP  11
+#define LED_BELL  12
 
 // Serial to parallel shift register 74hc595
 #define SHIFT_CLOCK_PIN  A4  // rising edge active
@@ -53,10 +60,12 @@
 #define POLARITY_ON_PIN    11  // L - active
 #define POLARITY_OFF_PIN   13  // L - active
 
+#define NO_MATTER  0
+
 // For led chips like Neopixels, which have a data line, ground, and power, you just
 // need to define DATA_PIN.  For led chipsets that are SPI based (four wires - data, clock,
 // ground, and power), like the LPD8806 define both DATA_PIN and CLOCK_PIN
-#define DATA_PIN 3
+#define DATA_PIN   3
 #define CLOCK_PIN 13
 
 // Define the array of leds
@@ -84,8 +93,12 @@ int blink_countdown = 0;
 #define NUM_MODESETS  5  // 0 - lift, 1,2,3 - switches, 4 - lift stop
 
 // map keypad number to number in the LED chain
-char keymap[NUM_KEYS] = {7, 6, 8, 5, 9, 4, 10, 3, 11, 2, 12, 1, 0};
+char keymap[NUM_KEYS] = {7,   // KEY_P
+                         6, 8, 5, 9, 4, 10, 3, 11, 2, 12,  // DIGITS
+                         6, 8, 5, 9, 4, 10, 3, 11, 2, 12,  // DIGITS
+                         1, 0};                            // KEY_STOP, KEY_BELL
 char mode[NUM_MODESETS][NUM_KEYS];
+char physical_key[NUM_PHYS_KEYS];
 char key[NUM_KEYS];      // 0 - released, 1 - pressed
 char last_key[NUM_KEYS]; // last state of key; used to detect a change
 #define MAX_KEY_COUNTDOWN  3000
@@ -200,21 +213,21 @@ void readKbd() {
   //digitalWrite(ROW_1, LOW);
   pinMode(ROW_1, OUTPUT);
     if(digitalRead(COL_1) == LOW)
-      key[10] = 1;
+      physical_key[10] = 1;
     else
-      key[10] = 0;
+      physical_key[10] = 0;
     if(digitalRead(COL_2) == LOW)
-      key[8] = 1;
+      physical_key[8] = 1;
     else
-      key[8] = 0;
+      physical_key[8] = 0;
     if(digitalRead(COL_3) == LOW)
-      key[6] = 1;
+      physical_key[6] = 1;
     else
-      key[6] = 0;
+      physical_key[6] = 0;
     if(digitalRead(COL_4) == LOW)
-      key[4] = 1;
+      physical_key[4] = 1;
     else
-      key[4] = 0;
+      physical_key[4] = 0;
   pinMode(ROW_1, INPUT);
   //digitalWrite(ROW_1, HIGH);
   
@@ -222,65 +235,91 @@ void readKbd() {
   //digitalWrite(ROW_2, LOW);
   pinMode(ROW_2, OUTPUT);
   if(digitalRead(COL_1) == LOW)
-      key[2] = 1;
+      physical_key[2] = 1;
     else
-      key[2] = 0;
+      physical_key[2] = 0;
     if(digitalRead(COL_2) == LOW)
-      key[0] = 1;
+      physical_key[0] = 1;
     else
-      key[0] = 0;
+      physical_key[0] = 0;
     if(digitalRead(COL_3) == LOW)
-      key[1] = 1;
+      physical_key[1] = 1;
     else
-      key[1] = 0;
+      physical_key[1] = 0;
     if(digitalRead(COL_4) == LOW)
-      key[3] = 1;
+      physical_key[3] = 1;
     else
-      key[3] = 0;
+      physical_key[3] = 0;
   pinMode(ROW_2, INPUT);
   //digitalWrite(ROW_2, HIGH);
   
   //digitalWrite(ROW_3, LOW);
   pinMode(ROW_3, OUTPUT);
     if(digitalRead(COL_1) == LOW)
-      key[5] = 1;
+      physical_key[5] = 1;
     else
-      key[5] = 0;
+      physical_key[5] = 0;
     if(digitalRead(COL_2) == LOW)
-      key[7] = 1;
+      physical_key[7] = 1;
     else
-      key[7] = 0;
+      physical_key[7] = 0;
     if(digitalRead(COL_3) == LOW)
-      key[9] = 1;
+      physical_key[9] = 1;
     else
-      key[9] = 0;
+      physical_key[9] = 0;
 /*    if(digitalRead(COL_4) == LOW)
-      key[4] = 1;
+      physical_key[4] = 1;
     else
-      key[4] = 0;  */
+      physical_key[4] = 0;  */
   pinMode(ROW_3, INPUT);
   //digitalWrite(ROW_3, HIGH);
   
   //digitalWrite(ROW_4, LOW);
   pinMode(ROW_4, OUTPUT);  
     if(digitalRead(COL_1) == LOW)
-      key[11] = 1;
+      physical_key[11] = 1;
     else
-      key[11] = 0;
+      physical_key[11] = 0;
     if(digitalRead(COL_2) == LOW)
-      key[12] = 1;
+      physical_key[12] = 1;
     else
-      key[12] = 0;
+      physical_key[12] = 0;
 /*    if(digitalRead(COL_3) == LOW)
-      key[6] = 1;
+      physical_key[6] = 1;
     else
-      key[6] = 0;
+      physical_key[6] = 0;
     if(digitalRead(COL_4) == LOW)
-      key[4] = 1;
+      physical_key[4] = 1;
     else
-      key[4] = 0;  */
+      physical_key[4] = 0;  */
   pinMode(ROW_4, INPUT);
   //digitalWrite(ROW_4, HIGH);
+}
+
+void mapPhysKeyToKey(char mode, char key_p_state) {
+  switch(mode) {
+    case 0:  // lift
+            memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]) * 11);
+            memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
+            break;
+            
+            // switches
+    case 1:
+    case 2:
+    case 3:
+    case 4: if(key_p_state == 0) {  // P key is OFF
+              // copy keys normal way, digits to lower bank
+              memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]) * 11);
+              memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
+            }
+            else {
+              // P key is ON -> copy digit keys to upper bank
+              memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]));
+              memcpy(&key[11], &physical_key[1], sizeof(physical_key[1]) * 10);
+              memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
+            }
+            break;
+  }
 }
 
 // actualize each key's key_countdown
@@ -342,11 +381,20 @@ void switch_mode_while_visible(char key_num, char modeset_num) {
       switch_mode(key_num, modeset_num);
 
       // Update queue of shift register pins events
-      if(key_num > 0 && key_num <= 10) {  // number keys only
+      if(mode[modeset_num][KEY_STOP])                             // key stop is active
+      if(key_num >= KEY_DIGIT_MIN && key_num <= KEY_DIGIT_MAX) {  // number keys only
         if(mode[modeset_num][key_num])
-          add_to_queue(mode[modeset_num][0] * 10 + key_num-1, 300, 1, 1, 1); // bit_num, duration, exclusive, polarity, energize
+          add_to_queue(key_num-1, 300, 1, 1, 1); // bit_num, duration, exclusive, polarity, energize
         else
-          add_to_queue(mode[modeset_num][0] * 10 + key_num-1, 300, 1, 0, 1);
+          add_to_queue(key_num-1, 300, 1, 0, 1);
+      }
+      
+      // Update queue with all digits ON if key STOP is pressed
+      if(key_num == KEY_STOP) {
+        for(unsigned char ff = KEY_DIGIT_MIN; ff<KEY_DIGIT_MAX; ff++) {
+          if(mode[modeset_num][ff])
+            add_to_queue(ff-1, 300, 1, mode[modeset_num][KEY_STOP], 1);
+        }
       }
       
     }
@@ -377,9 +425,23 @@ void display_based_on_floor(char from_key, char to_key) {
     }
 }
 
-void display_based_on_mode(char from_key, char to_key, char modeset_num) {
+void display_based_on_mode(char from_led, char to_led, char modeset_num, char key_p_state) {
     // lit up the right mode if recently pressed; turn off if slept long 
-    for(key_num=from_key; key_num <= to_key; key_num++) {
+    char led_num;
+    for(led_num=from_led; led_num <= to_led; led_num++) {
+      
+      if(led_num == 0)
+        key_num = KEY_P;
+      else
+      if(led_num == 11)
+        key_num = KEY_STOP;
+      else
+      if(led_num == 12)
+        key_num = KEY_BELL;
+      else
+        // digit keys
+        key_num = led_num + key_p_state * 10;
+        
       if(key_countdown[key_num] > 0) {
           leds[keymap[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]+1];
       }
@@ -403,6 +465,9 @@ void dim_turned_off_by_group(char driver_key_mode, char from_key, char to_key) {
 
 
 
+
+// Shift Register (SR) and event queue routines
+
 void send_to_sr(int data) {
   digitalWrite(SHIFT_LATCH_PIN, LOW);
   /*
@@ -419,7 +484,7 @@ void send_to_sr(int data) {
 }
 
 // queue buffers
-#define MAX_QUEUE 8
+#define MAX_QUEUE 64
 int duration[MAX_QUEUE];
 unsigned char value[MAX_QUEUE] = {0};  // bit 2 - exclusive, bit 1 - polarity, bit 0 - energize
 unsigned char bit_num[MAX_QUEUE];
@@ -553,6 +618,8 @@ void display_debug_2() {
     
     leds[keymap[queue_start]] = CRGB::Green;
     leds[keymap[queue_end]] = CRGB::Red;
+
+    leds[0] = CRGB::Blue;
 }
 
 
@@ -728,28 +795,30 @@ void loop() {
     sleep_countdown = SLEEP_TIME;
 
   
-  countdownKbd(12, 12);  // fade out just the two "function" keys 
+  countdownKbd(22, 22);  // fade out just the two "function" keys 
   memcpy(last_key, key, sizeof(last_key));
   readKbd();
+  mapPhysKeyToKey(mode[0][KEY_BELL],            // key 22 - bell, it's state determines mode
+                  mode[ mode[0][KEY_BELL] ][0]);  // key 0 - P
 
 /*
   if(key[11]) {
-    switch_mode_while_visible(11, mode[0][12]);
+    switch_mode_while_visible(11, mode[0][KEY_BELL]);
     // DEBUG DISPLAY for key 11
     // debug display - mark target floor with the LED on the keypad
     leds[keymap[target_floor]] = CRGB::Green;
   } 
   else
 */
-  if(key[12]) {
+  if(key[KEY_BELL]) {
     // Switch mode only if pressed while lit.
-    switch_mode_while_visible(12, MODESET_FUNCKEYS);
+    switch_mode_while_visible(KEY_BELL, MODESET_FUNCKEYS);
     // DEBUG DISPLAY for key 12
     display_debug_2();
   }
   else {
     // REGULAR DISPLAY
-    if(mode[0][12] == 0) {
+    if(mode[0][KEY_BELL] == 0) {
       // Lift mode
       // detect if key_pressed and update floors[]
       key_pressed = false;
@@ -762,32 +831,34 @@ void loop() {
       display_based_on_floor(0, 10);
       // uses: curr_floor, blink_state, sleep_countdown, blink_countdown, leds[], keymap[], floors[]
 
-      // handle STOP key (11)
-      manage_key_mode(11, 11, MODESET_FLOOR_STOP);  // from key, to key, mode set
-      display_based_on_mode(11, 11, MODESET_FLOOR_STOP);
+      // handle STOP key (KEY_STOP)
+      manage_key_mode(KEY_STOP, KEY_STOP, MODESET_FLOOR_STOP);  // from key, to key, mode set
+      display_based_on_mode(LED_STOP, LED_STOP, MODESET_FLOOR_STOP, mode[MODESET_FLOOR_STOP][KEY_P]);
     }
     else
-    if(mode[0][12] == 1) {
+    if(mode[0][KEY_BELL] == 1) {
       // Switch/Toggle mode
-      manage_key_mode(0, 11, MODESET_SWITCHES_1);  // from key, to key, mode set
-      display_based_on_mode(0, 11, MODESET_SWITCHES_1);
+      manage_key_mode(KEY_P, KEY_STOP, MODESET_SWITCHES_1);  // from key, to key, mode set
+      display_based_on_mode(LED_P, LED_STOP, MODESET_SWITCHES_1, mode[MODESET_SWITCHES_1][KEY_P]);
     }
     else
-    if(mode[0][12] == 2) {
-      manage_key_mode(0, 11, MODESET_SWITCHES_2);
-      display_based_on_mode(0, 11, MODESET_SWITCHES_2);
+    if(mode[0][KEY_BELL] == 2) {
+      manage_key_mode(KEY_P, KEY_STOP, MODESET_SWITCHES_2);
+      display_based_on_mode(LED_P, LED_STOP, MODESET_SWITCHES_2, mode[MODESET_SWITCHES_2][KEY_P]);
     }
     else
-    if(mode[0][12] == 3) {
-      manage_key_mode(0, 11, MODESET_SWITCHES_3);
-      display_based_on_mode(0, 11, MODESET_SWITCHES_3);
-      //dim_turned_off_by_group(mode[mode[0][12]][11], 0, 10);
+    if(mode[0][KEY_BELL] == 3) {
+      manage_key_mode(KEY_P, KEY_STOP, MODESET_SWITCHES_3);
+      display_based_on_mode(LED_P, LED_STOP, MODESET_SWITCHES_3, mode[MODESET_SWITCHES_3][KEY_P]);
+      //dim_turned_off_by_group(mode[mode[0][KEY_BELL]][11], 0, 10);
     }
   } //else debug
 
-  // DISPLAY key 12
-  //display_based_on_mode(11, 11, mode[0][12]);  // key 12 determines modeset for other keys
-  display_based_on_mode(12, 12, MODESET_FUNCKEYS);
+
+
+  // DISPLAY key KEY_BELL
+  //display_based_on_mode(11, 11, mode[0][KEY_BELL]);  // key BELL determines modeset for other keys
+  display_based_on_mode(LED_BELL, LED_BELL, MODESET_FUNCKEYS, NO_MATTER);
   // uses: key_num, key_countdown[], mode[][], leds[], keymap[]
 
 
