@@ -21,12 +21,14 @@
 	
 	
 	This revision:
-	  - introduce speech queue to communicate comfortably
-	  - introduce a story framework: places(floors), persons, items
-	  - introduce elevator falling and crashing
-	  - relocate setup() function
+	  - vastly advanced story logic
+	  - changed comment numbering
+	  - most comments get true durations
+	  - introduce mystery floor 11
+	  - bug fixes, code cleanup
 	
 *************************************************************************/
+
 #include "FastLED.h"
 #include <Wtv020sd16p.h>
 
@@ -44,7 +46,7 @@ Wtv020sd16p wtv020sd16p(WTV_RESET_PIN, WTV_CLOCK_PIN, WTV_DATA_PIN, WTV_BUSY_PIN
 #define NUM_LEDS      13
 #define NUM_PHYS_KEYS 13
 #define NUM_KEYS      23  // 10 virtual keys (with shift)
-#define NUM_FLOORS    11
+#define NUM_FLOORS    13  // 0 ground (P), 1..10 floors, 11 hidden floor, 12 lift cabin
 
 // virtual keys
 #define KEY_P          0
@@ -147,7 +149,7 @@ int state_countdown = 0;
 char curr_floor = 0;
 char target_floor = 0;
 int dir = 1;
-char floors[NUM_KEYS];
+char floors[NUM_FLOORS];  // !!! was [NUM_KEYS]; make sure it is not required
 
 
 char ff;
@@ -483,7 +485,81 @@ void dim_turned_off_by_group(char driver_key_mode, char from_key, char to_key) {
 
 /* SPEAK QUEUE */
 #define MAX_SPK  400  // 512
-unsigned char spk_len[MAX_SPK] = {5};  // 5 = 500 ms
+unsigned char spk_len[MAX_SPK] = {
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 6, 7, 
+  5, // 46 wynosza
+  5, // 47 ma przy sobie
+  5, 15,  5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 
+  3, // 75 i
+  3, // 76 oraz 
+  5, 5, 5,   7, 7, 7, 5, 5, 5, 5, 5, 5, 
+  21, // 89 donos do GRU - pietro zawiera
+  21, // 90 mdleje na widok 11 pietra
+  21, // 91 mowi, ze istnieje 11 pietro
+  19, // 92 musi poczekac
+  19, // 93 musza poczekac
+  26, // 94 smutni raportuja utrudnienia
+  35, // 95 dobra zmiana ignor limitow
+  6, // 96 niestety
+  6, // 97 wyprowadzaja
+  5, 5,
+  5, 5, 5, 5, // 100-103 Ania
+  6, 6, 5, 5, // 104-107 Gosia
+  4, 4, 5, 4, // 108-111 Rysiu
+  5, 5, 5, 5, // 112-115 Agnieszka
+  3, 3, 5, 3, // 116-119 Jozef
+  4, 4, 4, 4, // Julia
+  5, 5, 5, 5, // Kasia
+  6, 6, 7, 6, // 128-131 Krzysztof
+  5, 5, 5, 5, // 132-135 Lena
+  4, 4, 6, 5, // 136-139 Lukasz
+  4, 4, 5, 4, // 140-143 Marcin
+  5, 5, 5, 5, // 144-147 Mariola
+  4, 4, 5, 4, // 148-151 Michal                                         
+  3, 3, 5, 3, // 152-155 Piotr
+  4, 4, 5, 4, // 156-159 Rafal
+  5, 5, 5, 5, // 160-163 Jola
+  5, 5, 5, 5, // 164-167 Sowa
+  5, 5, 5, 5, // 168-171 Wladek
+  5, 5, 5, 5, // 172-175 Zosia
+  5, 5, 5, 5, // 176-179 Nastka
+  5, 5, 5, 5, // 180-183 Asia
+  5, 5, 5, 5, // 184-187 Majka
+  5, 5, 5, 5, // 188-191 Ela
+  7, 7, 7, 7, // 192-195 Grupa smutnych panow
+  9, 9, 10, 10, // 196-199 Srebrny deweloper
+  4, 4, 4, 4, // 200-203 Anuszka
+  6, 6, 6, 6, // 204-207 Malgorzata
+  8, 8,10,10, // 208-211 Kot Behemot
+  6, 6, 8, 7, // 212-215 Woland                 
+                                                  13, 13, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5,
+  35, // 228 musi wyjsc z windy
+  35, // 229 musza wyjsc z windy
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
+  7, 7, 8, 8, // 300-303 Olej slonecznikowy
+  5, 5, 5, 5, // 304-307 Dlugopis
+  5, 5, 5, 5, // 308-311 Rekopis
+  4, 4, 4, 4, // 312-315 Frytki 
+  4, 4, 4, 4, // 316-319 Gwozdz
+  4, 4, 4, 4, // 320-323 Kartka
+  5, 5, 5, 5, //
+  5, 5, 5, 5, // 328-331 Klucz
+  5, 5, 5, 5, // 332-335 Kwiat
+  3, 3, 3, 3, // 336-339 List
+  4, 4, 4, 4, // 340-343 Mlotek
+  5, 5, 5, 5, // 344-347 Nasionko
+  5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+  8, 8, 8, 8, // 360-363 przepis na piwo
+  5, 5, 5, 5, 
+  5, 5, 5, 5, 
+  6, 6, 6, 6, // Worek ziemniakow
+  5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+  5, 5, 5, 5, 5, 5, 5, 5, 5, 5
+  };  // 5 = 500 ms
 #define MAX_SPK_QUEUE 30
 int spk_que[MAX_SPK_QUEUE];
 unsigned char spk_que_len = 0;
@@ -496,13 +572,40 @@ void add_spk(int spk_num) {
     spk_que_len++;
   }
 }
+// change latest added spk, if any
+void chg_spk(int spk_num) {
+  if(spk_que_len > 0) {
+    spk_que[spk_que_len-1] = spk_num;
+  }
+}
+void say_num(long num) {
+  char buf[15];
+  sprintf(buf, "%ld", num);
+  for(char ff=0; ff<strlen(buf); ff++) {
+    wtv020sd16p.asyncPlayVoice(buf[ff] - '0' + 10);
+    delay(1000);
+  }
+}
 void spk_que_tick() {
+  int spk;
   if(spk_que_len > 0 && spk_countdown == -1)
     spk_countdown = 0;
   if(spk_countdown == 0) {
 //wtv020sd16p.asyncPlayVoice(2);
     if(0 < spk_que_len) {
-      spk_countdown = ((unsigned char)spk_len[ spk_que[0] ]) * 100;
+      spk = spk_que[0];
+      spk_countdown = spk_len[ spk ] * 100;
+      /*
+ if(spk_que[0] == 212 || spk_que[0] == 213) {
+   say_num(spk_len[spk]);
+   wtv020sd16p.asyncPlayVoice(104);
+   delay(100);
+   say_num(spk_len[213]);
+   wtv020sd16p.asyncPlayVoice(104);
+   delay(100);
+   say_num(spk_countdown);
+ }
+      */
       wtv020sd16p.asyncPlayVoice(spk_que[0]);
       memmove(&spk_que[0], &spk_que[1], sizeof(spk_que[1])*(spk_que_len-1));  // thanks to this line spk_qie_pos is always 0
       spk_que_len--;
@@ -516,6 +619,9 @@ void spk_que_tick() {
       spk_countdown--;
   }
 }
+char is_speaking() {
+  return (spk_que_len > 0 || spk_countdown > 0);
+}
 
 /* END of SPEAK QUEUE */
 
@@ -526,74 +632,190 @@ void spk_que_tick() {
 /* LIFT WORLD SIMULATION */
 
 #define NUM_ITEMS    21
-#define NUM_PERSONS  22
-#define NUM_FLOORS   12  // 0 ground (P), 1..10 floors, 11 lift cabin
-#define PLACE_CABIN  11
+#define NUM_PERSONS  29
+//#define NUM_FLOORS   13  // 0 ground (P), 1..10 floors, 11 mystery floor, 12 lift cabin
+#define PLACE_GROUND_FLOOR    0
+#define PLACE_MYSTERY_FLOOR  11
+#define PLACE_CABIN          12
 // item levels, lower level item can hold higher level item
 #define LVL_1    0x40  // 0100 0000
 #define LVL_2    0x80  // 1000 0000
 #define LVL_3    0xC0  // 1100 0000
-// floor
+
+// plot specific parameters
+#define PERSON_ANIA         0
+#define PERSON_ANUSZKA     25
+#define PERSON_GOSIA        1
+#define PERSON_MALGORZATA  26
+#define PERSON_RYSIU        2
+#define PERSON_KOT_BEHEMOT 27
+#define PERSON_WOLAND      28
+#define PERSON_WLADEK      17
+#define PERSON_SPY  PERSON_WLADEK
+#define PERSON_SMUTNI      23
+#define PERSON_SREBRNY     24
+#define ITEM_OLEJ_SLONECZNIKOWY  0
+#define ITEM_WYROK     20  // !!! 20 to zegarek, chwilowo uzyty jako wezwanie
+#define ITEM_NAKAZ     22
+#define ITEM_WEZWANIE  23
+
+char person_spy = PERSON_SPY;
+
+#define ALT_FLOOR_ANNOUNCEMENTS   0   // anuszka starts announcements
+#define ANUSZKA_BROKE_OIL         1
+#define ANUSZKA_BROKE_OIL_SILENT  2
+#define LIMITS_APPLY_FLAG         3   // people dont go overboard
+//char alt_floor_announcements = 0;
+//char anuszka_broke_oil = 0;
+
+unsigned long plot_flags = 0;
+unsigned long nuts_person_flags = 0;
+unsigned long unhappy_person_flags = 0;
+unsigned long rejected_person_flags = 0;
+unsigned long targeted_person_flags = 0;
+
+void set_plot_flag(unsigned long *flags, char flag_num) {
+  unsigned long mask = 1;
+  *flags |= mask << flag_num;
+}
+void clear_plot_flag(unsigned long *flags, char flag_num) {
+  unsigned long mask = 1;
+  *flags &= ((mask << flag_num) ^ 0xFFFF);
+}
+char is_plot_flag(unsigned long *flags, char flag_num) {
+  unsigned long mask = 1;
+  return ((*flags & (mask << flag_num)) > 0);  // return exactly 1 or 0
+}
+char num_set_flags(unsigned long *flags) {
+  unsigned long mask = 1;
+  char flag_count = 0;
+  for(char ff = 0; ff < 32; ff++) {
+    if(*flags & mask) {
+      flag_count++;
+    }
+    mask <<= 1;
+  }
+  return flag_count;
+}
+// returns number of n-th flag being set (least significant bit first)
+// n starting from 0
+// returns 0 if first bit is set or if none is; works exactly as array
+// so make sure to call only if you know any bits are set
+char next_set_flag(unsigned long *flags, char n) {
+  unsigned long mask = 1;
+  char flag_count = 0;
+  for(char ff = 0; ff < 32; ff++) {
+    if(*flags & mask) {
+      if(flag_count == n)
+        return ff;
+      flag_count++;
+    }
+    mask <<= 1;
+  }
+  return 0;
+}
+
+
+
+
+// who/what is where
 char lift_obj[NUM_PERSONS + NUM_ITEMS] = 
 {
   // persons
-  0,                         // 0. person 0 is on floor 1
-  1,                         // 1. person 1 is on floor 2
-  2,                         // 2. person 2 is on floor 3
-  3,                         // 3. person 3 is on floor 5
-  4,
-  5,
-  6,
-  7,
-  8,
-  9,
-  7,
-  8,
-  6,
-  7,
-  8,
-  9,
-  2,
-  3,
-  4,
-  5,
-  6,
-  10,
+  0,                         // person 0 Ania is on floor 0
+        3,                         // person 1 Gosia is on floor 3
+      2,                         // person 2 Rysiu is on floor 3
+  9,                         // person 3 Agnieszka
+          4,                         // person 4 Jozef
+  5,                         // person 5 Julia
+  6,                         // person 6 Kasia
+  7,                         // person 7 Krzysztof
+  8,                         // person 8 Lena
+  9,                         // person 9 Lukasz
+  7,                         // person 10 Marcin
+  8,                         // person 11 Mariola
+  6,                         // person 12 Michał
+  7,                         // person 13 Piotr
+  8,                         // person 14 Rafal
+        3,                         // person 15 Jola
+      2,                         // person 16 Sowa
+        3,                         // person 17 Wladek
+          4,                         // person 18 Zosia
+  5,                         // person 19 Nastka
+  6,                         // person 20 Asia
+  10,                        // person 21 Majka
+     1,                         // person 22 Ela
+  0,                        // person 23 Grupa smutnych panow
+  10,                        // person 24 Srebrny deweloper
+  11,                        // person 25 Anuszka
+  11,                        // person 26 Malgorzata
+  11,                        // person 27 Kot Behemot
+  11,                        // person 28 Woland
   // items
-  LVL_1 + 1,               // 4. item 0 is on 1st floor
-  LVL_1 + NUM_FLOORS + 0,  // 5. item 1 is on 0th person
-  LVL_1 + NUM_FLOORS + 0,  // 6. item 2 is on 0th person
-  LVL_2 + NUM_FLOORS + NUM_PERSONS + 2,   // 7. item 3 is on item 2
-  LVL_1 + 0,               // 8. item 4 is on ground floor
-  LVL_1 + PLACE_CABIN,     // 9. item 5 is in lift cabin
-  LVL_1 + NUM_FLOORS + 2,  // 10. item 6 is on 2nd person
-  LVL_1 + NUM_FLOORS + 3,  // 11. item 7 is on 3rd person
-  LVL_1 + PLACE_CABIN,     // 12. item 8 is in lift cabin
-  LVL_1 + NUM_FLOORS + 2,  // 13. item 9 is on 2nd person
-  LVL_1 + NUM_FLOORS + 3,  // 14. item 10 is on 3rd person
-  LVL_1 + 0,               // 15. item 11 is on ground_floor
-  LVL_1 + 1,               // 16. item 12 is on 1st floor
-  LVL_1 + 2,               // 17. item 13 is on 2nd floor
-  LVL_1 + 3,               // 18. item 14 is on 3rd floor
-  LVL_1 + 4,               // 19. item 15 is on 4th floor
-  LVL_1 + 5,               // 20. item 16 is on 5th floor
-  LVL_1 + 6,               // 21. item 17 is on 6th floor
-  LVL_1 + 7,               // 22. item 18 is on 7th floor
-  LVL_1 + 8,               // 23. item 19 is on 8th floor
-  LVL_1 + 9                // 24. item 20 is on 9th floor
+  LVL_1 + 0,               // item 0 olej slonecznikowy is on 0th floor
+  LVL_1 + NUM_FLOORS + 1,  // item 1 dlugopis is on person 1 Gosia
+  LVL_1 + NUM_FLOORS + NUM_PERSONS + 5,  // item 2 rekopis is on item 5 kartka
+  LVL_2 + NUM_FLOORS + NUM_PERSONS + 18, // item 3 frytki is on item 18 worek ziemniakow
+  LVL_1 + 0,               // item 4 gwozdz is on ground floor
+  LVL_1 + NUM_FLOORS + 1,  // item 5 kartka is on person 1 Gosia
+  LVL_1 + NUM_FLOORS + NUM_PERSONS + 17,  // item 6 konstytucja is on item 17 szkatulka
+  LVL_1 + NUM_FLOORS + 5,  // item 7 klucz is on 5th person Julia
+  LVL_1 + NUM_FLOORS + NUM_PERSONS + 11, // item 8 kwiat is in item 11 nasionko
+  LVL_1 + NUM_FLOORS + 2,  // item 9 list is on 2nd person
+  LVL_1 + NUM_FLOORS + 5,  // item 10 mlotek is on person 5 Julia
+  LVL_1 + 0,               // item 11 nasionko is on ground_floor
+  LVL_1 + 1,               // item 12 noz is on 1st floor
+  LVL_1 + 2,               // item 13 okulary is on 2nd floor
+  LVL_1 + 3,               // item 14 pierscionek is on 3rd floor
+  LVL_1 + NUM_FLOORS + 4,  // item 15 przepis na piwo is on person 4 Jozef
+  LVL_1 + 5,               // item 16 ramka is on 5th floor
+  LVL_1 + 6,               // item 17 szkatulka is on 6th floor
+  LVL_1 + 0,               // item 18 worek ziemniakow is on 0th floor
+  LVL_1 + 8,               // item 19 zdjecie is on 8th floor
+  LVL_1 + NUM_FLOORS + PERSON_SMUTNI  // item 20 zegarek is on person smutni panowie
+  // nakaz aresztowania
+  // wezwanie
+  // 
 };
 char people_on_board;
 char max_people_on_board;
 char hospitalized_person;
+char removed_person = -1;
+char rozsadek_rzadu = 3;   // !!! make it bigger; declines with rejections of smutni
+char smutni_target = -1;   // noone on target
 
-char exiting[NUM_PERSONS];
+//char exiting[NUM_PERSONS];
 char ex_count;
+unsigned long exiting_flags = 0;
 // uses curr_floor
 void exit_lift(char person) {
   lift_obj[person] = curr_floor;
-  exiting[ex_count] = person;
+  //exiting[ex_count] = person;
+  set_plot_flag(&exiting_flags, person);
   ex_count++;
   people_on_board--;
+}
+char forced_ex_count = 0;
+unsigned long forced_exiting_flags = 0;
+void force_exit_lift(char person) {
+  lift_obj[person] = curr_floor;
+  //exiting[ex_count] = person;
+  set_plot_flag(&forced_exiting_flags, person);
+  forced_ex_count++;
+  people_on_board--;
+}
+void move_person_by_stairs(char person, char to_floor) {
+  // ignore if person is not on real floor (dont move her from cabin)
+  if(lift_obj[person] >= PLACE_CABIN)
+    return;
+  lift_obj[person] = to_floor;
+}
+void move_item_floor_to_floor(char item, char to_floor) {
+  // ignore if item is in cabin or on person
+  if((lift_obj[NUM_PERSONS + item] & 0x3F) >= PLACE_CABIN)
+    return;
+  lift_obj[NUM_PERSONS + item] = 
+    (lift_obj[NUM_PERSONS + item] & 0xC0) + to_floor;
 }
 
 // uses curr_floor
@@ -602,6 +824,25 @@ void hospitalize(char person) {
   hospitalized_person = person;
   people_on_board--;
 }
+
+char is_guilty(char person) {
+  if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person+1)
+    return ITEM_WYROK;
+  if(is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person+1)
+    return ITEM_NAKAZ;
+  if(is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person+1)
+    return ITEM_WEZWANIE;
+  return 0;
+}
+void remove_person(char person) {
+  lift_obj[person] = -2;
+  removed_person = person;
+  people_on_board--;
+  smutni_target = -1;
+  drop_items(person);
+}
+
+
 // sentence modifiers
 #define MIANOWNIK_UP        0
 #define MIANOWNIK_DOWN      1
@@ -612,17 +853,18 @@ void hospitalize(char person) {
 #define MSG_OFFS_PLACES  50
 #define MSG_OFFS_PERSONS 100  // 0 M/, 1 M\, 2 C
 #define MSG_OFFS_ITEMS   300
+#define MSG_ALT_FLOOR_ANUSZKA 12  // alternative floor announcements
 // general sentences
-#define MSG_I           65
-#define MSG_ORAZ        66
-#define MSG_LIFT_FALLING_SCREAM_3 67  // there are three consecutive, replaceable msgs
-#define MSG_DOOR_OPEN_2       70          // there are two consecutive msgs
-#define MSG_DOOR_CLOSE        72
-#define MSG_LIFT_RUNNING      73
-#define MSG_LIFT_RUNNING_OVERWEIGHT 74
-#define MSG_LIFT_DECELERATING 75
-#define MSG_LIFT_DECELERATING_OVERWEIGHT 76
-#define MSG_CRASH             77
+#define MSG_I           75
+#define MSG_ORAZ        76
+#define MSG_LIFT_FALLING_SCREAM_3 77  // there are three consecutive, replaceable msgs
+#define MSG_DOOR_OPEN_2       80          // there are two consecutive msgs
+#define MSG_DOOR_CLOSE        82
+#define MSG_LIFT_RUNNING      83
+#define MSG_LIFT_RUNNING_OVERWEIGHT 84
+#define MSG_LIFT_DECELERATING 85
+#define MSG_LIFT_DECELERATING_OVERWEIGHT 86
+#define MSG_CRASH_2           87
 
 // specific sentences
 #define MSG_WSIADA              42
@@ -630,6 +872,23 @@ void hospitalize(char person) {
 #define MSG_Z_WINDY_WYSIADA     44
 #define MSG_Z_WINDY_WYSIADAJA   45
 #define MSG_WYNOSZA             46
+#define MSG_OWNS                47
+#define MSG_JESTES_U_CELU       48
+#define MSG_ANUSZKA_ROZLALA_OLEJ 49
+#define MSG_FLOOR_CONTAINS      89   
+#define MSG_SHOCKED_DICOVERY_MYSTERY_FLOOR  90 // !!! dodac "mdleje na widok nieznanego piętra"
+#define MSG_SAYS_MYSTERY_FLOOR_EXISTS  91  // !!! dodac "mówi, ze istnieje tajemne pietro"
+#define MSG_NIE_WPUSZCZONY      92
+#define MSG_NIE_WPUSZCZENI      93
+#define MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA  94
+#define MSG_DOBRA_ZMIANA_IGNOR_LIMITOW  95
+#define MSG_NIESTETY            96
+#define MSG_WYPROWADZAJA        97
+#define MSG_HANDING             98
+#define MSG_SMUTNI_CHCA_ZNALEZC 99
+
+#define MSG_MUSI_WYJSC         228
+#define MSG_MUSZA_WYJSC        229 
 
 void communicate_exits() {
   char ff;
@@ -637,27 +896,37 @@ void communicate_exits() {
     add_spk(MSG_WYNOSZA);
     add_spk(MSG_OFFS_PERSONS + hospitalized_person * 4 + BIERNIK_PERSONS);
   }
+  if(removed_person > -1) {
+    add_spk(MSG_WYPROWADZAJA);
+    add_spk(MSG_OFFS_PERSONS + removed_person * 4 + BIERNIK_PERSONS);
+  }
   if(ex_count == 0)
     return;
   if(ex_count == 1) {
     add_spk(MSG_Z_WINDY_WYSIADA);
-    add_spk(MSG_OFFS_PERSONS + exiting[0] * 4 + MIANOWNIK_DOWN);
+    //add_spk(MSG_OFFS_PERSONS + exiting[0] * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(&exiting_flags, 0) * 4 + MIANOWNIK_DOWN);
   }
   else {
     add_spk(MSG_Z_WINDY_WYSIADAJA);
     for(ff=0; ff<ex_count-1; ff++) {
-      add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_UP);
+      //add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_UP);
+      add_spk(MSG_OFFS_PERSONS + next_set_flag(&exiting_flags, ff) * 4 + MIANOWNIK_UP);
     }
-    add_spk(MSG_ORAZ);
-    add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_I + random(2));
+    //add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(&exiting_flags, ff) * 4 + MIANOWNIK_DOWN);
   }
 }
-char entering[NUM_PERSONS];
+//char entering[NUM_PERSONS];
 char ent_count;
+unsigned long entering_flags = 0;
+
 void enter_lift(char person) {
   lift_obj[person] = PLACE_CABIN;
   // register action for further communication
-  entering[ent_count] = person;
+  //entering[ent_count] = person;
+  set_plot_flag(&entering_flags, person);
   ent_count++;
   people_on_board++;
 }
@@ -667,17 +936,22 @@ void communicate_entries() {
     return;
   if(ent_count == 1) {
     add_spk(MSG_WSIADA);
-    add_spk(MSG_OFFS_PERSONS + entering[0] * 4 + MIANOWNIK_DOWN);
+    //add_spk(MSG_OFFS_PERSONS + entering[0] * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(&entering_flags, 0) * 4 + MIANOWNIK_DOWN);
   }
   else {
     add_spk(MSG_WSIADAJA);
     for(ff=0; ff<ent_count-1; ff++) {
-      add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_UP);
+      //add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_UP);
+      add_spk(MSG_OFFS_PERSONS + next_set_flag(&entering_flags, ff) * 4 + MIANOWNIK_UP);
     }
-    add_spk(MSG_I);
-    add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_I + random(2));
+    //add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(&entering_flags, ff) * 4 + MIANOWNIK_DOWN);
   }
 }
+
+
 char picking[NUM_ITEMS];
 char picked[NUM_ITEMS];
 char pick_count;
@@ -705,9 +979,15 @@ void drop_item(char item_idx) {
   dropped[drop_count] = item_idx;
   drop_count++;
 }
-char handing[NUM_ITEMS];
-char handed[NUM_ITEMS];
-char receiver[NUM_ITEMS];
+void drop_items(char person) {
+  for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
+    if(is_item_on_person(ff) == person+1)
+      drop_item(ff);
+  }
+}
+char handing[NUM_ITEMS];  // osoba która daje
+char handed[NUM_ITEMS];   // dawany przedmiot
+char receiver[NUM_ITEMS]; // osoba która dostaje
 char hand_count;
 char hand_item_to_other_person(char item_idx, char other_person) {
   // assume it's never called if item is not on person
@@ -716,15 +996,27 @@ char hand_item_to_other_person(char item_idx, char other_person) {
   lift_obj[item_idx] = NUM_FLOORS + item_desc + other_person;   // move the item to person
   // register action for further communication
   handing[hand_count] = person_holding_item;
-  handed[hand_count] = item_idx;
+  handed[hand_count] = item_idx - NUM_PERSONS;
   receiver[hand_count] = other_person;
   hand_count++;
 }
 
+void communicate_handed() {
+  for(char ff=0; ff < hand_count; ff++) {
+    add_spk(MSG_OFFS_PERSONS + handing[ff] * 4 + MIANOWNIK_UP);
+    add_spk(MSG_HANDING);
+    add_spk(MSG_OFFS_PERSONS + receiver[ff] * 4 + CELOWNIK_PERSONS);
+    add_spk(MSG_OFFS_ITEMS + handed[ff] * 4 + BIERNIK_DOWN_ITEMS);
+  }
+}
 void clear_lift_world_queues() {
-  memset(exiting, 0, sizeof(exiting));
+  //memset(exiting, 0, sizeof(exiting));
+  exiting_flags = 0;
   ex_count = 0;
-  memset(entering, 0, sizeof(entering));
+  forced_exiting_flags = 0;
+  forced_ex_count = 0;
+  //memset(entering, 0, sizeof(entering));
+  entering_flags = 0;
   ent_count = 0;
   memset(picking, 0, sizeof(picking));
   memset(picked, 0, sizeof(picked));
@@ -737,6 +1029,8 @@ void clear_lift_world_queues() {
   memset(receiver, 0, sizeof(receiver));
   hand_count = 0;
   hospitalized_person = -1;  // -1 - noone to hospitalize, -2 - hospitalize someone in lift
+  removed_person = -1;
+  rejected_person_flags = 0;
 }
 // checks if object idx is a person (and not an item)
 // return 0 or person_id + 1  (remember the 1!)
@@ -762,28 +1056,222 @@ char is_place(char location) {
     return 0;
 }
 // checks if object(item) idx is located on person (owned by it) or not
-// return 0 or person id
+// return 0 or person_id + 1
 char is_item_on_person(char obj_idx) {
   char location_id = (lift_obj[obj_idx] & 0x3F);
   if(location_id < NUM_FLOORS)                  // it is on floor
     return 0;
   if(location_id >= NUM_FLOORS + NUM_PERSONS)   // it is on other item
     return 0;
-  return location_id - NUM_FLOORS;
+  return location_id + 1 - NUM_FLOORS;
 }
 char is_at_place(char obj_idx) {
+  if(obj_idx < 0)
+    return 0;
   char location = (lift_obj[obj_idx] & 0x3F);
   return is_place(location);  // is_place() returns place_id + 1, or 0
 }
+
+
 char want_to_exit(char person) {  // equal to idx in lift_obj[]!
+  switch(person) {
+    // ania/anuszka z olejem zawsze wysiada na 6, bez oleju na parterze
+    case PERSON_ANIA:
+    case PERSON_ANUSZKA:
+      if((is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY)) == person+1) {
+      // ma olej
+        if(curr_floor == 6)
+          return true;
+      } else {
+      // nie ma oleju
+        if(curr_floor == 0)
+          return true;
+      }
+      break;
+    case PERSON_WOLAND:
+      if(curr_floor == 11)
+        return true;
+      else
+        return false;
+      break;
+
+    case PERSON_SMUTNI:
+      // if have nakaz, do not leave on parter
+      // else if target is here, do not leave
+      // else leave 30%
+      if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person+1 ||
+         is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person+1 ||
+         is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person+1) {
+        // smutni maja przy sobie jakis wyrok lub nakaz
+        if(curr_floor == PLACE_GROUND_FLOOR)
+          return false;    // no exit on ground floor if have doc to deliver
+        else {
+          if(smutni_target > -1 &&
+             is_at_place(smutni_target) == curr_floor+1) {
+            // target jest na tym pietrze, wysiadamy do niego
+            return true;
+          }
+        }
+      } else {
+        // no paper to deliver; exit at ground floor
+        if(curr_floor == PLACE_GROUND_FLOOR)
+          return true;    // no exit on ground floor if have doc to deliver        
+      }
+      break;
+  }
+
+  // wszyscy poza smutnymi mając nakaz wysiadają tylko na parterze
+  if(person != PERSON_SMUTNI) {
+    if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person+1 ||
+       is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person+1 ||
+       is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person+1) {
+        // ma doręczony nakaz, wyrok, wezwanie; wiec wysiada tylko na parterze
+      if(curr_floor == PLACE_GROUND_FLOOR)
+        return true;
+      else
+        return false;
+    }
+  }
+
   return ((person % NUM_FLOORS) == curr_floor && random(10) < 8) ||
          (curr_floor == 0 && random(10) < 5) ||
          random(10) < 3;
-         
 }
+
+char person_loc(char person) {
+  return lift_obj[person];
+}
+
+void communicate_rejections() {
+  char rej_count = 0;
+  unsigned long rejected = rejected_person_flags;
+  char last_rej_person = -1;
+  for(char person = 0; person < 32; person++) {
+    if(rejected & 1) {
+      rej_count++;
+      if(rej_count == 1) {
+        add_spk(MSG_NIESTETY);
+      }
+      add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
+      last_rej_person = person;
+    }
+    rejected >>= 1;
+  }
+  if(rej_count == 0)
+    return;
+  if(rej_count == 1)
+    add_spk(MSG_NIE_WPUSZCZONY);
+  else {
+    chg_spk(MSG_I + random(2));
+    add_spk(MSG_OFFS_PERSONS + last_rej_person * 4 + MIANOWNIK_UP);
+    add_spk(MSG_NIE_WPUSZCZENI);
+  }
+
+  if(is_plot_flag(&rejected_person_flags, PERSON_SMUTNI)) {
+    add_spk(MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA);
+  }
+  if(rozsadek_rzadu == 1) {
+    add_spk(MSG_DOBRA_ZMIANA_IGNOR_LIMITOW);
+    rozsadek_rzadu = 0;  // do not inform again
+  }    
+}
+  
+void communicate_forced_exits() {
+  if(forced_ex_count == 0)
+    return;
+  char forced_ex_count = 0;
+  unsigned long forced = forced_exiting_flags;
+  char last_forced_person = -1;
+  for(char person = 0; person < 32; person++) {
+    if(forced & 1) {
+      forced_ex_count++;
+      if(forced_ex_count == 1) {
+        add_spk(MSG_NIESTETY);
+      }
+      add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
+      last_forced_person = person;
+    }
+    forced >>= 1;
+  }
+  if(forced_ex_count == 0)
+    return;
+  if(forced_ex_count == 1)
+    add_spk(MSG_MUSI_WYJSC);
+  else {
+    chg_spk(MSG_I + random(2));
+    add_spk(MSG_OFFS_PERSONS + last_forced_person * 4 + MIANOWNIK_UP);
+    add_spk(MSG_MUSZA_WYJSC);
+  }
+}
+
 char want_to_enter(char person) {
+  // assumption: person is on the curr_floor
+  if(people_on_board >= max_people_on_board && is_plot_flag(&plot_flags, LIMITS_APPLY_FLAG) &&
+     person != PERSON_SREBRNY) {
+    set_plot_flag(&unhappy_person_flags, person);
+    set_plot_flag(&rejected_person_flags, person);
+    return false;
+  }
+  clear_plot_flag(&unhappy_person_flags, person);
+  
+  // assumption: person is on curr_floor
+  switch(person) {
+    // ania/anuszka z olejem zawsze wsiada na parterze
+    case PERSON_ANIA:
+    case PERSON_ANUSZKA:
+      if((is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY)) == person+1) {
+      // ma olej
+        if(curr_floor == 0)
+          return true;
+      // jak nie ma oleju to wsiada na zasadach ogólnych
+      }
+      break;
+  }
+  switch(person) {
+    // Woland wsiada do windy jesli alter ego ktorejs mary nie zyje, a mara jest na 11 pietrze
+    case PERSON_WOLAND:
+      if(person_loc(PERSON_ANIA) == -1 && person_loc(PERSON_ANUSZKA) == 11 ||
+         person_loc(PERSON_GOSIA) == -1 && person_loc(PERSON_MALGORZATA) == 11 ||
+         person_loc(PERSON_RYSIU) == -1 && person_loc(PERSON_KOT_BEHEMOT) == 11)
+        return true;
+      else
+        return false;
+      break;
+    // Mary z piekiel wsiadaja do windy jesli jest tu Woland
+    case PERSON_ANUSZKA:
+      if(person_loc(PERSON_WOLAND) == curr_floor || person_loc(PERSON_WOLAND) == PLACE_CABIN) {
+        if(person_loc(PERSON_ANIA) == -1)
+          return true;
+        else
+          return false;
+      }
+      break;
+    case PERSON_MALGORZATA:
+      if(person_loc(PERSON_WOLAND) == curr_floor || person_loc(PERSON_WOLAND) == PLACE_CABIN) {
+        if(person_loc(PERSON_GOSIA) == -1)
+          return true;
+        else
+          return false;
+      }
+      break;
+    case PERSON_KOT_BEHEMOT:
+      if(person_loc(PERSON_WOLAND) == curr_floor || person_loc(PERSON_WOLAND) == PLACE_CABIN) {
+        if(person_loc(PERSON_RYSIU) == -1)
+          return true;
+        else
+          return false;
+      }
+      break;
+    case PERSON_SMUTNI:
+      if(smutni_target > -1 && 
+         person_loc(smutni_target) == PLACE_CABIN)
+        return true;  // smutni wchodza jesli ich target jest w windzie
+      break;
+  }
   return random(2); //person == curr_floor;
 }
+
+
 char are_other_persons_here(char obj_idx) {  // obj_id - we expect index in lift_obj[] here
   char object_location = (lift_obj[obj_idx] & 0x3F);
   char other_person = 0;
@@ -803,11 +1291,129 @@ char want_to_be_picked(char picking_person, char item) {
   // ignore person at the moment, but it may be usable later
   return random(10) < 5;
 }
+char communicate_person_owns(char person) {
+  // loop through items and find those on the person
+  char own_count = 0;
+  char item;
+  for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
+    if(is_item_on_person(ff) == person+1) {
+      if(own_count == 0) {
+        add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
+        add_spk(MSG_OWNS);
+      }
+      own_count++;
+      item = ff - NUM_PERSONS;
+      add_spk(MSG_OFFS_ITEMS + item * 4 + BIERNIK_UP_ITEMS);  // item name
+    }
+  }
+  if(own_count == 1) {
+    chg_spk(MSG_OFFS_ITEMS + item * 4 + BIERNIK_DOWN_ITEMS);  // item name
+  } else if(own_count > 1) {
+    chg_spk(MSG_I + random(2));
+    add_spk(MSG_OFFS_ITEMS + item * 4 + BIERNIK_DOWN_ITEMS);  // item name
+  }
+}
+void communicate_possessions_in_cabin() {
+  char person;
+  for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
+    if((person = is_person(ff)) > 0) {
+      person--; // is_person() returns id+1, to use 0 as false
+      if(is_at_place(person) == (PLACE_CABIN+1)) {
+        // person in cabin
+        communicate_person_owns(person);
+      }
+    }
+  }
+}
+void communicate_possessions_entered_to_cabin() {
+  char person;
+  for(char ff = 0; ff < ent_count; ff++) {
+    // person in cabin
+    //communicate_person_owns(entering[ff]);
+    communicate_person_owns(next_set_flag(&entering_flags, ff));
+  }
+}
+
+// comunicate target of smutni if they have just entered the lift
+void communicate_target_of_entering_smutni() {
+  if(is_plot_flag(&entering_flags, PERSON_SMUTNI)) {
+    if(smutni_target > -1)
+      add_spk(MSG_SMUTNI_CHCA_ZNALEZC);
+      add_spk(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
+  }
+}
+
+char num_items_on_floor(char floor_num) {
+  // loop through items and find those on the floor
+  char own_count = 0;
+  for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
+    if(is_at_place(ff) == floor_num+1) {
+      own_count++;
+    }
+  }
+  return own_count;
+}
+char communicate_floor_contains(char floor_num) {
+  // loop through items and find those on the floor
+  char own_count = 0;
+  char item;
+  for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
+    if(is_at_place(ff) == floor_num+1) {
+      if(own_count == 0) {
+        add_spk(MSG_FLOOR_CONTAINS);
+      }
+      own_count++;
+      item = ff - NUM_PERSONS;
+      add_spk(MSG_OFFS_ITEMS + item * 4 + MIANOWNIK_UP);  // item name
+    }
+  }
+  if(own_count == 1) {
+    chg_spk(MSG_OFFS_ITEMS + item * 4 + MIANOWNIK_DOWN);  // change item name
+  } else if(own_count > 1) {
+    chg_spk(MSG_I + random(2));
+    add_spk(MSG_OFFS_ITEMS + item * 4 + MIANOWNIK_DOWN);  // item name
+  }
+}
+
+// Pick random nuts person in cabin to speak about mystery floor
+void communicate_mystery_floor_gossip() {
+  char nuts_count = 0;
+  do {
+    for(char person = 0; person < NUM_PERSONS; person++) {
+      if(is_plot_flag(&nuts_person_flags, person))
+      if(is_at_place(person) == (PLACE_CABIN+1)) {
+        nuts_count++;
+        if(random(10) < nuts_count) {
+          add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
+          if(curr_floor == PLACE_MYSTERY_FLOOR)
+            add_spk(MSG_SHOCKED_DICOVERY_MYSTERY_FLOOR);
+          else
+            add_spk(MSG_SAYS_MYSTERY_FLOOR_EXISTS);
+          return;
+        }
+      }
+    }
+  } while (nuts_count > 0);
+}
+
+
+void communicate_premigration_stuff() {
+  //if(anuszka_broke_oil == 1) {
+  if(is_plot_flag(&plot_flags, ANUSZKA_BROKE_OIL) && !is_plot_flag(&plot_flags, ANUSZKA_BROKE_OIL_SILENT)) {
+    set_plot_flag(&plot_flags, ANUSZKA_BROKE_OIL_SILENT);  // do not communicate next time
+    add_spk(MSG_ANUSZKA_ROZLALA_OLEJ);
+  }
+}
+
+void communicate_nuts() {
+  
+}
+
 void migrate_objs() {
   char person;
   char place;
   char other_person;
-  for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
+  for(char ff = 0; ff < NUM_PERSONS; ff++) {
     if((person = is_person(ff)) > 0) {
       person--; // is_person() returns id+1, to use 0 as false
       if((place = is_at_place(person)) == (PLACE_CABIN+1)) {
@@ -817,19 +1423,52 @@ void migrate_objs() {
           hospitalize(person);  // it also changes hospitalized_person to person id
         }
         else
+        if(curr_floor == PLACE_GROUND_FLOOR && is_guilty(person)) {
+          remove_person(person);
+        }
+        else
         if(want_to_exit(person))
           exit_lift(person);
-      } else {
+      } 
+      /*
+        else {
         place--;
         // person not in cabin
         if((place == curr_floor) && want_to_enter(person))
           enter_lift(person);
       }
+      */
     }
+  }
+  for(char ff = 0; ff < NUM_PERSONS; ff++) {
+    if((person = is_person(ff)) > 0) {
+      person--; // is_person() returns id+1, to use 0 as false
+      if((place = is_at_place(person)) == (curr_floor+1)) {
+        place--;
+        // person not in cabin
+        if(!is_plot_flag(&exiting_flags, person) && want_to_enter(person))
+          enter_lift(person);
+      }
+    }
+  }
+  // now force exits if srebrny dev entered the lift
+  if(is_at_place(PERSON_SREBRNY) == (PLACE_CABIN+1)) {
+    for(char ff = 0; ff < NUM_PERSONS; ff++) {
+      if(ff == PERSON_SREBRNY)  // ignore srebrny
+        continue;
+      if((is_at_place(ff)) == (PLACE_CABIN+1)) {
+        // person in cabin
+        force_exit_lift(ff);
+      }
+    }
+  }
+    
+  {
     /*
     else
     // it is an item, not a person; check if it sits on a person
     if((person = is_item_on_person(ff)) > 0) {
+      person--;
       if((other_person = are_other_persons_here(person)) > 0) {
         other_person--;
         // want to be handed to someone else?
@@ -854,7 +1493,158 @@ void migrate_objs() {
     */
   }
 }
+// call before clear_lift_world_queues()
+char just_entered(char person) {
+  for(char ff=0; ff<ent_count; ff++)
+    //if(entering[ff] == person)
+    if(next_set_flag(&entering_flags, ff) == person)
+      return true;
+  return false;
+}
+// call before clear_lift_world_queues()
+char just_exited(char person) {
+  for(char ff=0; ff<ex_count; ff++)
+    //if(exiting[ff] == person)
+    if(next_set_flag(&exiting_flags, ff) == person)
+      return true;
+  return false;
+}
+char get_next_target() {
+  for(char person=0; person < NUM_PERSONS; person++) {
+    if(person_loc(person) > -1 && 
+       is_plot_flag(&forced_exiting_flags, person)) {
+      return person;
+    }
+  }
+}
+void proceed_after_migration() {
+  char person;
+  char place;
+  char other_person;
+  if(is_at_place(PERSON_WOLAND) == PLACE_MYSTERY_FLOOR+1) {     // woland exited on floor 11
+    move_person_by_stairs(PERSON_WOLAND, 0);  // move woland to ground floor
+  }
+  if(just_entered(PERSON_WOLAND))
+    floors[PLACE_MYSTERY_FLOOR] = 1;  // Woland presses invisible key to go to floor 11
 
+  if(just_entered(PERSON_ANUSZKA)) {
+    set_plot_flag(&plot_flags, ALT_FLOOR_ANNOUNCEMENTS); // make anuszka announce floors from now on
+    //alt_floor_announcements = MSG_ALT_FLOOR_ANUSZKA;
+  }
+
+  // there was a crash and anuszka was in it and she had an oil
+  if((hospitalized_person == -2 || hospitalized_person >= 0) &&     // there was a crash
+     (just_exited(PERSON_ANUSZKA) || person_loc(PERSON_ANUSZKA) == PLACE_CABIN ||
+      hospitalized_person == PERSON_ANUSZKA) && !just_entered(PERSON_ANUSZKA) && // anuszka was there
+     (is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANUSZKA+1) // anuszka had oil
+    ) {
+    //anuszka_broke_oil = 1; // communicate broken oil
+    set_plot_flag(&plot_flags, ANUSZKA_BROKE_OIL);  // communicate broken oil
+  }
+     
+  // ania na 6 pietrze zostawia olej, a na innych pietrach go bierze
+  if(just_exited(PERSON_ANIA)) {
+    // anuszka takes the oil if it is not on 6th floor
+     if(curr_floor != 6) {
+       if(is_at_place(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor+1)
+         pick_item(PERSON_ANIA, NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
+     } else {
+       if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANIA+1)
+         drop_item(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
+     }
+  }
+  // anuszka na 6 pietrze zostawia olej, a na innych pietrach go bierze
+  if(just_exited(PERSON_ANUSZKA)) {
+    // anuszka takes the oil if it is not on 6th floor
+     if(curr_floor != 6) {
+       if(is_at_place(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor+1)
+         pick_item(PERSON_ANUSZKA, NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
+     } else {
+       if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANUSZKA+1)
+         drop_item(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
+     }
+  }
+
+  if(curr_floor == PLACE_MYSTERY_FLOOR)
+  for(char ff = 0; ff < NUM_PERSONS; ff++) {
+    if((person = is_person(ff)) > 0) {
+      person--; // is_person() returns id+1, to use 0 as false
+      if((place = is_at_place(person)) == (PLACE_CABIN+1)) {
+        place--;
+        switch(person) {
+          case PERSON_ANUSZKA:
+          case PERSON_WOLAND:
+          case PERSON_KOT_BEHEMOT:
+          case PERSON_MALGORZATA:
+            break;  // ignore them
+          default:
+            // other persons on floor 11 get nuts
+          set_plot_flag(&nuts_person_flags, person);
+        }
+      }
+    }
+  }
+
+  // smutni sie skarza centrali
+  if(is_plot_flag(&rejected_person_flags, PERSON_SMUTNI)) {
+    if(rozsadek_rzadu > 0)
+      rozsadek_rzadu--;
+    if(rozsadek_rzadu == 1)
+      clear_plot_flag(&plot_flags, LIMITS_APPLY_FLAG);  // gvmt orders ignoring weight limit of the lift
+  }
+
+  if(smutni_target >= 0 &&  // smutni maja kogos na celowniku; szukaja kogos
+     (is_at_place(PERSON_SMUTNI) == is_at_place(smutni_target)) &&
+     is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI+1) {  // smutni i ich target sa na tym samym pietrze
+    hand_item_to_other_person(NUM_PERSONS + ITEM_WYROK, smutni_target);  // smutni dają nakaz targetowi
+  }
+
+  // wpisz na sile usunietych z windy na liste targetow
+  targeted_person_flags |= forced_exiting_flags;
+
+  if((just_exited(PERSON_SMUTNI) || person_loc(PERSON_SMUTNI) <= PLACE_GROUND_FLOOR) && // smutni wlasnie wyszli z windy lub sa poza budynkiem
+     curr_floor == PLACE_GROUND_FLOOR &&        // jestesmy na parterze
+     smutni_target == -1 &&                     // smutni nie maja w tej chwili targetu
+     is_at_place(NUM_PERSONS + ITEM_WYROK) == PLACE_GROUND_FLOOR+1) {  // wyrok mozna podniesc na parterze
+    smutni_target = get_next_target();
+    pick_item(PERSON_SMUTNI, ITEM_WYROK);
+    lift_obj[PERSON_SMUTNI] = 0;
+  }
+
+/*
+  if(just_entered(PERSON_SPY))
+    person_spy = PERSON_WLADEK;
+  else
+    person_disclosing_floor_contents = -1;
+*/
+  
+  /*
+  if(hospitalized_person == PERSON_ANIA) {
+    move_person_by_stairs(PERSON_ANIA, 11);  // have ania appear on 11th floor waiting for woland
+  }
+  
+  for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
+    if((person = is_person(ff)) > 0) {
+      person--; // is_person() returns id+1, to use 0 as false
+      if((place = is_at_place(person)) == (PLACE_CABIN+1)) {
+        place--;
+        // person in cabin
+        if(hospitalized_person == -2) {
+          hospitalize(person);  // it also changes hospitalized_person to person id
+        }
+        else
+        if(want_to_exit(person))
+          exit_lift(person);
+      } else {
+        place--;
+        // person not in cabin
+        if((place == curr_floor) && want_to_enter(person))
+          enter_lift(person);
+      }
+    }
+  }
+  */
+}
 void activate_objs() {
   
 }
@@ -1111,10 +1901,24 @@ void setup() {
 
       // Initializes the wtv sound module
       wtv020sd16p.reset();
-      memset(spk_len, 5, sizeof(spk_len)); // set default for all
+      //memset(spk_len, 8, sizeof(spk_len)); // set default for all; test purposes only
+      /*
+      memset(&spk_len[0], 0, sizeof(spk_len[0]) * 40); 
+      memset(&spk_len[40], 1, sizeof(spk_len[0]) * 40); 
+      memset(&spk_len[80], 2, sizeof(spk_len[0]) * 40); 
+      memset(&spk_len[120], 3, sizeof(spk_len[0]) * 40); 
+      memset(&spk_len[160], 4, sizeof(spk_len[0]) * 40); 
+      memset(&spk_len[200], 8, sizeof(spk_len[0]) * 40); 
+      memset(&spk_len[240], 6, sizeof(spk_len[0]) * 40); 
+      memset(&spk_len[280], 7, sizeof(spk_len[0]) * 40); 
+      memset(&spk_len[320], 8, sizeof(spk_len[0]) * 40); 
+      memset(&spk_len[360], 9, sizeof(spk_len[0]) * 40); 
+      */
       clear_lift_world_queues();
       people_on_board = 0;
       max_people_on_board = (NUM_PERSONS / 2) > 2 ? 2 : NUM_PERSONS / 2;
+
+      set_plot_flag(&plot_flags, LIMITS_APPLY_FLAG); // start with people obeying lift limits
 }
 
 
@@ -1170,13 +1974,14 @@ void loop() {
            }
            if(state_countdown == 0) {
              state = LIFT_STOPPED;
-             wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor);  // Announcing "floor X"
+             wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + 
+                     is_plot_flag(&plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
            }
            break;
     case LIFT_STOPPED:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 800;  // how long it will stand still after stopping
+             state_countdown = 950;  // how long it will stand still after stopping
            }
            if(state_countdown == 0) {
              state = DOOR_OPENING;
@@ -1186,7 +1991,7 @@ void loop() {
     case DOOR_OPENING:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 1500;  // how long takes opening the door
+             state_countdown = 1600;  // how long takes opening the door
            }
            if(state_countdown == 0) {
              state = DOOR_OPEN;
@@ -1202,10 +2007,21 @@ void loop() {
            if(state_countdown == 0) {
              state = PASSENGERS_MOVEMENT;
              //wtv020sd16p.asyncPlayVoice(11);  // the sound of passenger movement
-             migrate_objs();
+             migrate_objs();  // floor <-> lift movements
+             proceed_after_migration();  // keep moving or play after migrations
+             communicate_premigration_stuff();
              communicate_exits();
              communicate_entries();
+             communicate_rejections();
+             communicate_forced_exits();
+             communicate_handed();
+             communicate_possessions_entered_to_cabin();
+             communicate_target_of_entering_smutni();
+             communicate_mystery_floor_gossip();
+             if(is_at_place(person_spy) == (PLACE_CABIN+1))
+               communicate_floor_contains(curr_floor);
              clear_lift_world_queues();  // queues already loaded to communication
+             //communicate_possessions_in_cabin();
            }
            break;
     case PASSENGERS_MOVEMENT:
@@ -1214,7 +2030,7 @@ void loop() {
              last_state = state;
              state_countdown = 1500;  // for how long the passenger enters or exits the lift
            }
-           if(spk_que_len > 0)
+           if(is_speaking())
              state_countdown = 500;  // keep waiting until communicating object moves
            if(state_countdown == 0) {
             /*
@@ -1287,7 +2103,7 @@ void loop() {
              state_countdown = 500;  // for how long the lift goes up one floor
            }
            // probability of falling down while going upwards
-           if(people_on_board > max_people_on_board &&
+           if(people_on_board > max_people_on_board + 1 &&
               curr_floor > 5 &&
               random(10000) < curr_floor + people_on_board)
              state = LIFT_START_FALLING;  // test
@@ -1320,7 +2136,7 @@ void loop() {
              state_countdown = 500;  // for how long the lift goes down one floor
            }
            // probability of falling down while going downwards
-           if(people_on_board > max_people_on_board && 
+           if(people_on_board > max_people_on_board + 1 && 
               curr_floor > 5 &&
               random(10000) < curr_floor + people_on_board)
              state = LIFT_START_FALLING;  // test
@@ -1373,7 +2189,7 @@ void loop() {
              if(curr_floor == target_floor) {
                state = LIFT_CRASHING;
                floors[curr_floor] = 0;
-               wtv020sd16p.asyncPlayVoice(MSG_CRASH);  // sound of crashing lift
+               wtv020sd16p.asyncPlayVoice(MSG_CRASH_2 + random(2));  // sound of crashing lift
              }
              else {
                state = LIFT_FALLING_DOWN;
@@ -1390,7 +2206,10 @@ void loop() {
            }
            if(state_countdown == 0) {
              state = LIFT_STOPPED;
-             wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor);  // Announcing "floor X"
+             //wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + alt_floor_announcements);  // Announcing "floor X"
+             wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + 
+                is_plot_flag(&plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
+
            }
            break;
   }
