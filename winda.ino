@@ -21,11 +21,12 @@
 	
 	
 	This revision:
-	  - introduce speech (handle Wtv020sd16p module)
-	  - handle long key press
+	  - introduce speech queue to communicate comfortably
+	  - introduce a story framework: places(floors), persons, items
+	  - introduce elevator falling and crashing
+	  - relocate setup() function
 	
 *************************************************************************/
-
 #include "FastLED.h"
 #include <Wtv020sd16p.h>
 
@@ -131,6 +132,11 @@ long sleep_countdown = 0;
 #define LIFT_STARTING  7
 #define LIFT_RUNNING_UP 8
 #define LIFT_RUNNING_DOWN 9
+#define PASSENGERS_MOVEMENT 10
+#define LIFT_START_FALLING  11
+#define LIFT_FALLING_DOWN   12
+#define LIFT_CRASHING       13
+
 
 char state = DOOR_OPEN;
 char last_state = RESTART_THIS_STATE;
@@ -148,83 +154,6 @@ char ff;
 char modeset_num = 0;
 char last_active_modeset_num = 0;
 
-void setup() {
-      pinMode(SHIFT_CLOCK_PIN, OUTPUT);
-      pinMode(SHIFT_LATCH_PIN, OUTPUT);
-      pinMode(SHIFT_DATA_PIN, OUTPUT);
-      pinMode(POLARITY_ON_PIN, OUTPUT);
-      pinMode(POLARITY_OFF_PIN, OUTPUT);
-  
-      pinMode(ROW_1, INPUT); // only one row at a time will be switched to output
-      pinMode(ROW_2, INPUT);
-      pinMode(ROW_3, INPUT);
-      pinMode(ROW_4, INPUT);
-      digitalWrite(ROW_1, LOW);
-      digitalWrite(ROW_2, LOW);
-      digitalWrite(ROW_3, LOW);
-      digitalWrite(ROW_4, LOW);
-      pinMode(COL_1, INPUT_PULLUP);
-      pinMode(COL_2, INPUT_PULLUP);
-      pinMode(COL_3, INPUT_PULLUP);
-      pinMode(COL_4, INPUT_PULLUP);
-      
-      // Uncomment/edit one of the following lines for your leds arrangement.
-      // FastLED.addLeds<TM1803, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<TM1804, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<TM1809, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<WS2811, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<WS2812B, DATA_PIN, RGB>(leds, NUM_LEDS);
-  	  FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-      // FastLED.addLeds<APA104, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<UCS1903, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<UCS1903B, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<GW6205, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<GW6205_400, DATA_PIN, RGB>(leds, NUM_LEDS);
-      
-      // FastLED.addLeds<WS2801, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<SM16716, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<LPD8806, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<P9813, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<APA102, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<DOTSTAR, RGB>(leds, NUM_LEDS);
-
-      // FastLED.addLeds<WS2801, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<SM16716, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<LPD8806, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<P9813, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<APA102, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<DOTSTAR, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-
-      // initialize each key's mode
-      for(modeset_num=0; modeset_num < NUM_MODESETS; modeset_num++)
-      for(key_num=0; key_num<NUM_KEYS; key_num++) {
-        mode[modeset_num][key_num] = 0;
-      }
-      
-      for(ff=0; ff<NUM_KEYS; ff++) {
-        key_countdown[ff] = MAX_KEY_COUNTDOWN;
-      }
-      for(ff=0; ff<NUM_KEYS; ff++) {
-        key_press_countdown[ff] = MAX_KEY_PRESS_COUNTDOWN;
-      }
-
-      
-      // blink all LEDs to indicate the program start
-      for(ff=0; ff<NUM_LEDS; ff++) {
-        leds[ff] = CRGB::White;
-      }
-      FastLED.show();
-      delay(1000);
-      for(ff=0; ff< NUM_LEDS; ff++) {
-        leds[ff] = CRGB::Black;
-      }
-      FastLED.show();
-
-
-      // Initializes the wtv sound module
-      wtv020sd16p.reset();
-}
 
 
 
@@ -551,6 +480,392 @@ void dim_turned_off_by_group(char driver_key_mode, char from_key, char to_key) {
 
 
 
+
+/* SPEAK QUEUE */
+#define MAX_SPK  400  // 512
+unsigned char spk_len[MAX_SPK] = {5};  // 5 = 500 ms
+#define MAX_SPK_QUEUE 30
+int spk_que[MAX_SPK_QUEUE];
+unsigned char spk_que_len = 0;
+//long spk_que_pos = 0;
+long spk_countdown = -1;
+
+void add_spk(int spk_num) {
+  if(spk_que_len < MAX_SPK_QUEUE - 1) {
+    spk_que[spk_que_len] = spk_num;
+    spk_que_len++;
+  }
+}
+void spk_que_tick() {
+  if(spk_que_len > 0 && spk_countdown == -1)
+    spk_countdown = 0;
+  if(spk_countdown == 0) {
+//wtv020sd16p.asyncPlayVoice(2);
+    if(0 < spk_que_len) {
+      spk_countdown = ((unsigned char)spk_len[ spk_que[0] ]) * 100;
+      wtv020sd16p.asyncPlayVoice(spk_que[0]);
+      memmove(&spk_que[0], &spk_que[1], sizeof(spk_que[1])*(spk_que_len-1));  // thanks to this line spk_qie_pos is always 0
+      spk_que_len--;
+      //spk_que_pos++;
+    } else {
+      //wtv020sd16p.stopVoice();
+      spk_countdown = -1;  // don't get in here again until spk_que_len gets > 0
+    }
+  } else {
+    if(spk_countdown > 0)
+      spk_countdown--;
+  }
+}
+
+/* END of SPEAK QUEUE */
+
+
+
+
+
+/* LIFT WORLD SIMULATION */
+
+#define NUM_ITEMS    21
+#define NUM_PERSONS  22
+#define NUM_FLOORS   12  // 0 ground (P), 1..10 floors, 11 lift cabin
+#define PLACE_CABIN  11
+// item levels, lower level item can hold higher level item
+#define LVL_1    0x40  // 0100 0000
+#define LVL_2    0x80  // 1000 0000
+#define LVL_3    0xC0  // 1100 0000
+// floor
+char lift_obj[NUM_PERSONS + NUM_ITEMS] = 
+{
+  // persons
+  0,                         // 0. person 0 is on floor 1
+  1,                         // 1. person 1 is on floor 2
+  2,                         // 2. person 2 is on floor 3
+  3,                         // 3. person 3 is on floor 5
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  7,
+  8,
+  6,
+  7,
+  8,
+  9,
+  2,
+  3,
+  4,
+  5,
+  6,
+  10,
+  // items
+  LVL_1 + 1,               // 4. item 0 is on 1st floor
+  LVL_1 + NUM_FLOORS + 0,  // 5. item 1 is on 0th person
+  LVL_1 + NUM_FLOORS + 0,  // 6. item 2 is on 0th person
+  LVL_2 + NUM_FLOORS + NUM_PERSONS + 2,   // 7. item 3 is on item 2
+  LVL_1 + 0,               // 8. item 4 is on ground floor
+  LVL_1 + PLACE_CABIN,     // 9. item 5 is in lift cabin
+  LVL_1 + NUM_FLOORS + 2,  // 10. item 6 is on 2nd person
+  LVL_1 + NUM_FLOORS + 3,  // 11. item 7 is on 3rd person
+  LVL_1 + PLACE_CABIN,     // 12. item 8 is in lift cabin
+  LVL_1 + NUM_FLOORS + 2,  // 13. item 9 is on 2nd person
+  LVL_1 + NUM_FLOORS + 3,  // 14. item 10 is on 3rd person
+  LVL_1 + 0,               // 15. item 11 is on ground_floor
+  LVL_1 + 1,               // 16. item 12 is on 1st floor
+  LVL_1 + 2,               // 17. item 13 is on 2nd floor
+  LVL_1 + 3,               // 18. item 14 is on 3rd floor
+  LVL_1 + 4,               // 19. item 15 is on 4th floor
+  LVL_1 + 5,               // 20. item 16 is on 5th floor
+  LVL_1 + 6,               // 21. item 17 is on 6th floor
+  LVL_1 + 7,               // 22. item 18 is on 7th floor
+  LVL_1 + 8,               // 23. item 19 is on 8th floor
+  LVL_1 + 9                // 24. item 20 is on 9th floor
+};
+char people_on_board;
+char max_people_on_board;
+char hospitalized_person;
+
+char exiting[NUM_PERSONS];
+char ex_count;
+// uses curr_floor
+void exit_lift(char person) {
+  lift_obj[person] = curr_floor;
+  exiting[ex_count] = person;
+  ex_count++;
+  people_on_board--;
+}
+
+// uses curr_floor
+void hospitalize(char person) {
+  lift_obj[person] = -1;
+  hospitalized_person = person;
+  people_on_board--;
+}
+// sentence modifiers
+#define MIANOWNIK_UP        0
+#define MIANOWNIK_DOWN      1
+#define CELOWNIK_PERSONS    2
+#define BIERNIK_PERSONS     3
+#define BIERNIK_UP_ITEMS    2
+#define BIERNIK_DOWN_ITEMS  3
+#define MSG_OFFS_PLACES  50
+#define MSG_OFFS_PERSONS 100  // 0 M/, 1 M\, 2 C
+#define MSG_OFFS_ITEMS   300
+// general sentences
+#define MSG_I           65
+#define MSG_ORAZ        66
+#define MSG_LIFT_FALLING_SCREAM_3 67  // there are three consecutive, replaceable msgs
+#define MSG_DOOR_OPEN_2       70          // there are two consecutive msgs
+#define MSG_DOOR_CLOSE        72
+#define MSG_LIFT_RUNNING      73
+#define MSG_LIFT_RUNNING_OVERWEIGHT 74
+#define MSG_LIFT_DECELERATING 75
+#define MSG_LIFT_DECELERATING_OVERWEIGHT 76
+#define MSG_CRASH             77
+
+// specific sentences
+#define MSG_WSIADA              42
+#define MSG_WSIADAJA            43
+#define MSG_Z_WINDY_WYSIADA     44
+#define MSG_Z_WINDY_WYSIADAJA   45
+#define MSG_WYNOSZA             46
+
+void communicate_exits() {
+  char ff;
+  if(hospitalized_person > -1) {
+    add_spk(MSG_WYNOSZA);
+    add_spk(MSG_OFFS_PERSONS + hospitalized_person * 4 + BIERNIK_PERSONS);
+  }
+  if(ex_count == 0)
+    return;
+  if(ex_count == 1) {
+    add_spk(MSG_Z_WINDY_WYSIADA);
+    add_spk(MSG_OFFS_PERSONS + exiting[0] * 4 + MIANOWNIK_DOWN);
+  }
+  else {
+    add_spk(MSG_Z_WINDY_WYSIADAJA);
+    for(ff=0; ff<ex_count-1; ff++) {
+      add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_UP);
+    }
+    add_spk(MSG_ORAZ);
+    add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_DOWN);
+  }
+}
+char entering[NUM_PERSONS];
+char ent_count;
+void enter_lift(char person) {
+  lift_obj[person] = PLACE_CABIN;
+  // register action for further communication
+  entering[ent_count] = person;
+  ent_count++;
+  people_on_board++;
+}
+void communicate_entries() {
+  char ff;
+  if(ent_count == 0)
+    return;
+  if(ent_count == 1) {
+    add_spk(MSG_WSIADA);
+    add_spk(MSG_OFFS_PERSONS + entering[0] * 4 + MIANOWNIK_DOWN);
+  }
+  else {
+    add_spk(MSG_WSIADAJA);
+    for(ff=0; ff<ent_count-1; ff++) {
+      add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_UP);
+    }
+    add_spk(MSG_I);
+    add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_DOWN);
+  }
+}
+char picking[NUM_ITEMS];
+char picked[NUM_ITEMS];
+char pick_count;
+// have person take item from place where she stands
+void pick_item(char person, char item_idx) {
+  char item_desc = (lift_obj[item_idx] & 0xC0);
+  lift_obj[item_idx] = NUM_FLOORS + item_desc + person;   // move the item to person (person 0 idx in lift_obj[] == NUM_FLOORS)
+  // register action for further communication
+  picking[pick_count] = person;
+  picked[pick_count] = item_idx;
+  pick_count++;
+}
+char dropping[NUM_ITEMS];
+char dropped[NUM_ITEMS];
+char drop_count;
+// have person drop item to the place the person is in and register the action
+void drop_item(char item_idx) {
+  // assume it's never called if item is not on person
+  char person_holding_item = (lift_obj[item_idx] & 0x3F) - NUM_FLOORS;
+  char person_location = (lift_obj[ person_holding_item ] & 0x3F);
+  char item_desc = (lift_obj[item_idx] & 0xC0);
+  lift_obj[item_idx] = item_desc + person_location;  // move the item to floor idx
+  // register action for further communication
+  dropping[drop_count] = person_holding_item;
+  dropped[drop_count] = item_idx;
+  drop_count++;
+}
+char handing[NUM_ITEMS];
+char handed[NUM_ITEMS];
+char receiver[NUM_ITEMS];
+char hand_count;
+char hand_item_to_other_person(char item_idx, char other_person) {
+  // assume it's never called if item is not on person
+  char person_holding_item = (lift_obj[item_idx] & 0x3F) - NUM_FLOORS;
+  char item_desc = (lift_obj[ item_idx ] & 0xC0);
+  lift_obj[item_idx] = NUM_FLOORS + item_desc + other_person;   // move the item to person
+  // register action for further communication
+  handing[hand_count] = person_holding_item;
+  handed[hand_count] = item_idx;
+  receiver[hand_count] = other_person;
+  hand_count++;
+}
+
+void clear_lift_world_queues() {
+  memset(exiting, 0, sizeof(exiting));
+  ex_count = 0;
+  memset(entering, 0, sizeof(entering));
+  ent_count = 0;
+  memset(picking, 0, sizeof(picking));
+  memset(picked, 0, sizeof(picked));
+  pick_count = 0;
+  memset(dropping, 0, sizeof(dropping));
+  memset(dropped, 0, sizeof(dropped));
+  drop_count = 0;
+  memset(handing, 0, sizeof(handing));
+  memset(handed, 0, sizeof(handed));
+  memset(receiver, 0, sizeof(receiver));
+  hand_count = 0;
+  hospitalized_person = -1;  // -1 - noone to hospitalize, -2 - hospitalize someone in lift
+}
+// checks if object idx is a person (and not an item)
+// return 0 or person_id + 1  (remember the 1!)
+char is_person(char obj_idx) {  // obj_idx is an idx of lift_obj[]
+  if(obj_idx < NUM_PERSONS)     // it is a person
+    return obj_idx + 1;  // obj_idx is incidentally a person id
+  else
+    return 0;
+  //return obj_id - NUM_FLOORS;
+  /*
+  if((lift_obj[obj_id] >> 6) == 0)
+    return obj_id;
+  else
+    return 0;
+  */
+}
+// checks if object id is a floor or a cabin (and not person or item)
+// return 0 or place id + 1 (there is no place idx!)
+char is_place(char location) {
+  if(location < NUM_FLOORS)
+    return location + 1;
+  else
+    return 0;
+}
+// checks if object(item) idx is located on person (owned by it) or not
+// return 0 or person id
+char is_item_on_person(char obj_idx) {
+  char location_id = (lift_obj[obj_idx] & 0x3F);
+  if(location_id < NUM_FLOORS)                  // it is on floor
+    return 0;
+  if(location_id >= NUM_FLOORS + NUM_PERSONS)   // it is on other item
+    return 0;
+  return location_id - NUM_FLOORS;
+}
+char is_at_place(char obj_idx) {
+  char location = (lift_obj[obj_idx] & 0x3F);
+  return is_place(location);  // is_place() returns place_id + 1, or 0
+}
+char want_to_exit(char person) {  // equal to idx in lift_obj[]!
+  return ((person % NUM_FLOORS) == curr_floor && random(10) < 8) ||
+         (curr_floor == 0 && random(10) < 5) ||
+         random(10) < 3;
+         
+}
+char want_to_enter(char person) {
+  return random(2); //person == curr_floor;
+}
+char are_other_persons_here(char obj_idx) {  // obj_id - we expect index in lift_obj[] here
+  char object_location = (lift_obj[obj_idx] & 0x3F);
+  char other_person = 0;
+  // loop all people and get the last being at the same place
+  for(char possible_neighbor = 0; possible_neighbor < NUM_PERSONS; possible_neighbor++) {
+    if(possible_neighbor != obj_idx) { // skip given object
+      if((lift_obj[possible_neighbor] & 0x3F) == object_location)
+        other_person = possible_neighbor;
+    }
+  }
+  return other_person + 1;
+}
+char want_to_be_dropped(char item) {
+  return random(10) == 0;
+}
+char want_to_be_picked(char picking_person, char item) {
+  // ignore person at the moment, but it may be usable later
+  return random(10) < 5;
+}
+void migrate_objs() {
+  char person;
+  char place;
+  char other_person;
+  for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
+    if((person = is_person(ff)) > 0) {
+      person--; // is_person() returns id+1, to use 0 as false
+      if((place = is_at_place(person)) == (PLACE_CABIN+1)) {
+        place--;
+        // person in cabin
+        if(hospitalized_person == -2) {
+          hospitalize(person);  // it also changes hospitalized_person to person id
+        }
+        else
+        if(want_to_exit(person))
+          exit_lift(person);
+      } else {
+        place--;
+        // person not in cabin
+        if((place == curr_floor) && want_to_enter(person))
+          enter_lift(person);
+      }
+    }
+    /*
+    else
+    // it is an item, not a person; check if it sits on a person
+    if((person = is_item_on_person(ff)) > 0) {
+      if((other_person = are_other_persons_here(person)) > 0) {
+        other_person--;
+        // want to be handed to someone else?
+        hand_item_to_other_person(ff, other_person);
+      } else {
+        if(want_to_be_dropped(ff))
+          drop_item(ff);
+      }
+    } else
+    // it does not sit on a person; check if it sits on place (floor or cabin)
+    if((place = is_at_place(ff)) > 0) {
+      place--;
+      if((other_person = are_other_persons_here(ff)) > 0) {
+        other_person--;
+        if(want_to_be_picked(other_person, ff)) {
+          pick_item(other_person, ff);
+        }
+      }
+    } else
+    // it is not at place, it is at other item; ignore it
+    {}
+    */
+  }
+}
+
+void activate_objs() {
+  
+}
+
+/* END of LIFT WORLD SIMULATION */
+
+
+
+
+
+
 // Shift Register (SR) and event queue routines
 
 void send_to_sr(int data) {
@@ -717,13 +1032,104 @@ void display_debug_2() {
 
 
 
+
+
+
+void setup() {
+      pinMode(SHIFT_CLOCK_PIN, OUTPUT);
+      pinMode(SHIFT_LATCH_PIN, OUTPUT);
+      pinMode(SHIFT_DATA_PIN, OUTPUT);
+      pinMode(POLARITY_ON_PIN, OUTPUT);
+      pinMode(POLARITY_OFF_PIN, OUTPUT);
+  
+      pinMode(ROW_1, INPUT); // only one row at a time will be switched to output
+      pinMode(ROW_2, INPUT);
+      pinMode(ROW_3, INPUT);
+      pinMode(ROW_4, INPUT);
+      digitalWrite(ROW_1, LOW);
+      digitalWrite(ROW_2, LOW);
+      digitalWrite(ROW_3, LOW);
+      digitalWrite(ROW_4, LOW);
+      pinMode(COL_1, INPUT_PULLUP);
+      pinMode(COL_2, INPUT_PULLUP);
+      pinMode(COL_3, INPUT_PULLUP);
+      pinMode(COL_4, INPUT_PULLUP);
+      
+      // Uncomment/edit one of the following lines for your leds arrangement.
+      // FastLED.addLeds<TM1803, DATA_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<TM1804, DATA_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<TM1809, DATA_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<WS2811, DATA_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<WS2812B, DATA_PIN, RGB>(leds, NUM_LEDS);
+      FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
+      // FastLED.addLeds<APA104, DATA_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<UCS1903, DATA_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<UCS1903B, DATA_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<GW6205, DATA_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<GW6205_400, DATA_PIN, RGB>(leds, NUM_LEDS);
+      
+      // FastLED.addLeds<WS2801, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<SM16716, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<LPD8806, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<P9813, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<APA102, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<DOTSTAR, RGB>(leds, NUM_LEDS);
+
+      // FastLED.addLeds<WS2801, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<SM16716, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<LPD8806, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<P9813, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<APA102, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
+      // FastLED.addLeds<DOTSTAR, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
+
+      // initialize each key's mode
+      for(modeset_num=0; modeset_num < NUM_MODESETS; modeset_num++)
+      for(key_num=0; key_num<NUM_KEYS; key_num++) {
+        mode[modeset_num][key_num] = 0;
+      }
+      
+      for(ff=0; ff<NUM_KEYS; ff++) {
+        key_countdown[ff] = MAX_KEY_COUNTDOWN;
+      }
+      for(ff=0; ff<NUM_KEYS; ff++) {
+        key_press_countdown[ff] = MAX_KEY_PRESS_COUNTDOWN;
+      }
+
+      
+      // blink all LEDs to indicate the program start
+      for(ff=0; ff<NUM_LEDS; ff++) {
+        leds[ff] = CRGB::White;
+      }
+      FastLED.show();
+      delay(1000);
+      for(ff=0; ff< NUM_LEDS; ff++) {
+        leds[ff] = CRGB::Black;
+      }
+      FastLED.show();
+
+
+      // Initializes the wtv sound module
+      wtv020sd16p.reset();
+      memset(spk_len, 5, sizeof(spk_len)); // set default for all
+      clear_lift_world_queues();
+      people_on_board = 0;
+      max_people_on_board = (NUM_PERSONS / 2) > 2 ? 2 : NUM_PERSONS / 2;
+}
+
+
+
+
 void loop() {
 
   // process switch event queue
   process_queue_tick();
   clean_queue();
   //send_to_sr(0xff00);
-  
+
+  // process speaking queue
+  spk_que_tick();
+
   
   // aktualizuj target podczas ruchu w dana strone
   /*
@@ -760,66 +1166,95 @@ void loop() {
     case LIFT_STOPPING:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 500;  // how long it will be stopping
+             state_countdown = 1200;  // how long it will be stopping
            }
            if(state_countdown == 0) {
              state = LIFT_STOPPED;
-             wtv020sd16p.asyncPlayVoice(1);
+             wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor);  // Announcing "floor X"
            }
            break;
     case LIFT_STOPPED:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 500;  // how long it will stand still after stopping
+             state_countdown = 800;  // how long it will stand still after stopping
            }
            if(state_countdown == 0) {
              state = DOOR_OPENING;
-             wtv020sd16p.asyncPlayVoice(2);
+             wtv020sd16p.asyncPlayVoice(MSG_DOOR_OPEN_2 + random(2)); // the sound of opening door
            }
            break;
     case DOOR_OPENING:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 500;  // how long takes opening the door
+             state_countdown = 1500;  // how long takes opening the door
            }
            if(state_countdown == 0) {
              state = DOOR_OPEN;
-             wtv020sd16p.asyncPlayVoice(3);
+             //wtv020sd16p.asyncPlayVoice(3);   // the door has been opened
            }
            break;
     case DOOR_OPEN:
+           //enter_lift_state(500);
            if(last_state != state) {
              last_state = state;
-             state_countdown = 500;  // for how long the door is open
+             state_countdown = 200;  // for how long minimum the door stays open
            }
            if(state_countdown == 0) {
+             state = PASSENGERS_MOVEMENT;
+             //wtv020sd16p.asyncPlayVoice(11);  // the sound of passenger movement
+             migrate_objs();
+             communicate_exits();
+             communicate_entries();
+             clear_lift_world_queues();  // queues already loaded to communication
+           }
+           break;
+    case PASSENGERS_MOVEMENT:
+           //enter_lift_state(500);
+           if(last_state != state) {
+             last_state = state;
+             state_countdown = 1500;  // for how long the passenger enters or exits the lift
+           }
+           if(spk_que_len > 0)
+             state_countdown = 500;  // keep waiting until communicating object moves
+           if(state_countdown == 0) {
+            /*
+            if(passengers_to_go > 0) {
+               last_state = RESTART_THIS_STATE;
+               state = PASSENGERS_MOVEMENT;
+               passengers_to_go--;
+               wtv020sd16p.asyncPlayVoice(7);  // sound of moving passengers
+             } else
              if(target_floor != curr_floor) {
                state = DOOR_CLOSING;
-               wtv020sd16p.asyncPlayVoice(4);
+               wtv020sd16p.asyncPlayVoice(4);  // the sound of closing door
+             }
+             */
+             if(target_floor != curr_floor) {
+               state = DOOR_CLOSING;
+               wtv020sd16p.asyncPlayVoice(MSG_DOOR_CLOSE);  // the sound of closing door
              }
            }
            break;
+    
     case DOOR_CLOSING:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 500;  // how long takes closing the door
+             state_countdown = 700;  // how long takes closing the door
            }
            if(state_countdown == 0) {
-             if(target_floor != curr_floor) {
-               state = DOOR_CLOSED;
-               wtv020sd16p.asyncPlayVoice(5);
-             }
+             state = DOOR_CLOSED;
+             //wtv020sd16p.asyncPlayVoice(5);   // bump of door being closed 
            }
            break;
     case DOOR_CLOSED:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 500;  // for how long the lift holds after closing the door before it starts running
+             state_countdown = 100;  // for how long the lift holds after closing the door before it starts running
            }
            if(state_countdown == 0) {
              if(target_floor != curr_floor) {
                state = LIFT_STARTING;
-               wtv020sd16p.asyncPlayVoice(6);
+               //wtv020sd16p.asyncPlayVoice(6);   // sound of accelerating engines
              }
            }
            break;
@@ -831,11 +1266,17 @@ void loop() {
            if(state_countdown == 0) {
              if(dir > 0) {
                state = LIFT_RUNNING_UP;
-               wtv020sd16p.asyncPlayVoice(7);
+               if(people_on_board > max_people_on_board)
+                 wtv020sd16p.asyncPlayVoice(MSG_LIFT_RUNNING_OVERWEIGHT);   // sound of engines running up full speed
+               else
+                 wtv020sd16p.asyncPlayVoice(MSG_LIFT_RUNNING);
              }
              else {
                state = LIFT_RUNNING_DOWN;
-               wtv020sd16p.asyncPlayVoice(8);
+               if(people_on_board > max_people_on_board)
+                 wtv020sd16p.asyncPlayVoice(MSG_LIFT_RUNNING_OVERWEIGHT);
+               else
+                 wtv020sd16p.asyncPlayVoice(MSG_LIFT_RUNNING);   // sound of engines running down full speed
              }
            }
            break;
@@ -845,6 +1286,12 @@ void loop() {
              //dir = 1;
              state_countdown = 500;  // for how long the lift goes up one floor
            }
+           // probability of falling down while going upwards
+           if(people_on_board > max_people_on_board &&
+              curr_floor > 5 &&
+              random(10000) < curr_floor + people_on_board)
+             state = LIFT_START_FALLING;  // test
+             
            if(state_countdown == 0) {
              if(curr_floor < NUM_FLOORS)
                curr_floor++;
@@ -853,12 +1300,16 @@ void loop() {
              if(curr_floor == target_floor) {
                state = LIFT_STOPPING;
                floors[curr_floor] = 0;
-               wtv020sd16p.asyncPlayVoice(9);
+               //wtv020sd16p.asyncPlayVoice(MSG_LIFT_DECELERATING);  
+               if(people_on_board > max_people_on_board)
+                 wtv020sd16p.asyncPlayVoice(MSG_LIFT_DECELERATING_OVERWEIGHT);  // sound of deccelerating engines going upward
+               else
+                 wtv020sd16p.asyncPlayVoice(MSG_LIFT_DECELERATING);
              }
              else {
                last_state = RESTART_THIS_STATE;
                state = LIFT_RUNNING_UP;
-               wtv020sd16p.asyncPlayVoice(1);
+               //wtv020sd16p.asyncPlayVoice(7);  // sound of engines running up full speed (again)
              }
            }
            break;
@@ -868,6 +1319,12 @@ void loop() {
              // dir = -1;
              state_countdown = 500;  // for how long the lift goes down one floor
            }
+           // probability of falling down while going downwards
+           if(people_on_board > max_people_on_board && 
+              curr_floor > 5 &&
+              random(10000) < curr_floor + people_on_board)
+             state = LIFT_START_FALLING;  // test
+             
            if(state_countdown == 0) {
              if(curr_floor > 0)
                curr_floor--;
@@ -876,13 +1333,64 @@ void loop() {
              if(curr_floor == target_floor) {
                state = LIFT_STOPPING;
                floors[curr_floor] = 0;
-               wtv020sd16p.asyncPlayVoice(11);
+               //wtv020sd16p.asyncPlayVoice(MSG_LIFT_DECELERATING);  // sound of deccelerating engines going downward
+               if(people_on_board > max_people_on_board)
+                 wtv020sd16p.asyncPlayVoice(MSG_LIFT_DECELERATING_OVERWEIGHT);  // sound of deccelerating engines going upward
+               else
+                 wtv020sd16p.asyncPlayVoice(MSG_LIFT_DECELERATING);
              }
              else {
                state = LIFT_RUNNING_DOWN;
                last_state = RESTART_THIS_STATE;
-               wtv020sd16p.asyncPlayVoice(12);
+               //wtv020sd16p.asyncPlayVoice(8);  // sound of engines running down full speed (again)
              }
+           }
+           break;
+    case LIFT_START_FALLING:
+           if(last_state != state) {
+             if(last_state != RESTART_THIS_STATE)
+               wtv020sd16p.asyncPlayVoice(MSG_LIFT_FALLING_SCREAM_3 + random(3));  // sound of screaming while falling down
+             last_state = state;
+             state_countdown = 1000;  // how long take screams before lift starts falling
+           }
+           if(state_countdown == 0) {
+             state = LIFT_FALLING_DOWN;
+             //wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor);
+           }
+           break;
+    case LIFT_FALLING_DOWN:
+           if(last_state != state) {
+             last_state = state;
+             // dir = -1;
+             state_countdown = 150;  // for how long the lift falls down one floor
+           }
+           target_floor = 0;  // when falling keep setting target floor to 0
+           if(state_countdown == 0) {
+             if(curr_floor > 0)
+               curr_floor--;
+             // arrived to called floor  
+             //if(floors[curr_floor] > 0) {
+             if(curr_floor == target_floor) {
+               state = LIFT_CRASHING;
+               floors[curr_floor] = 0;
+               wtv020sd16p.asyncPlayVoice(MSG_CRASH);  // sound of crashing lift
+             }
+             else {
+               state = LIFT_FALLING_DOWN;
+               last_state = RESTART_THIS_STATE;
+               //wtv020sd16p.asyncPlayVoice(8);  // don't stop screaming
+             }
+           }
+           break;
+    case LIFT_CRASHING:
+           if(last_state != state) {
+             last_state = state;
+             state_countdown = 2500;  // how long the crash sounds out
+             hospitalized_person = -2; // hospitalize single person in lift, if any
+           }
+           if(state_countdown == 0) {
+             state = LIFT_STOPPED;
+             wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor);  // Announcing "floor X"
            }
            break;
   }
@@ -926,6 +1434,9 @@ void loop() {
     display_debug_2();
   }
   else {
+    if(key[KEY_STOP] && (state == LIFT_RUNNING_UP || state == LIFT_RUNNING_DOWN)) {
+      state = LIFT_START_FALLING;
+    }
     // REGULAR DISPLAY
     if(mode[0][KEY_BELL] == 0) {
       // Lift mode
