@@ -332,12 +332,14 @@ void next_mode(char key_num, char modeset_num) {
   else 
     mode[modeset_num][key_num] = 0;
 }
-void switch_mode_while_visible(char key_num, char modeset_num) {  // used by bell key
+void switch_mode_while_visible(char key_num, char modeset_num) {
+  // used by bell key so assume key_num == KEY_BELL
+  //                        and modeset_num == MODESET_FUNCKEYS
   // Switch mode only if pressed while lit.
   if(last_key[key_num] != key[key_num] &&   // just pressed or released
      key_press_countdown[key_num] > 0)      // and no long press
-    if(key_countdown[key_num] > 0) { // and did not sleep at the moment
-      next_mode(key_num, modeset_num);      
+    if(key_countdown[key_num] > 0) {        // and did not sleep at the moment
+      next_mode(key_num, modeset_num);      // KEY_BELL's mode determines modeset_num
     }
 }
 void switch_mode(char key_num, char modeset_num) {  // used by all except bell key
@@ -371,14 +373,14 @@ void all_digits_off() {
 void handle_queue_bulk(char key_num, char modeset_num) {  // used by stop key
   if(last_key[key_num] != key[key_num] &&    // just pressed or released
      key_press_countdown[key_num] > 0) {     // and no long press
-      if(last_active_modeset_num != modeset_num)
-        all_digits_off();
+      if(last_active_modeset_num != modeset_num)  // modeset changed
+        all_digits_off();                         // initially turn off previous modeset's keys
       // Update queue with all digits ON if key STOP is pressed
       for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
-        if(mode[modeset_num][ff])
+        if(mode[modeset_num][ff])                 // the key ff is ON
           add_to_queue(ff-KEY_DIGIT_MIN, ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
-          if(mode[modeset_num][KEY_STOP])
-            last_active_modeset_num = modeset_num;
+        if(mode[modeset_num][KEY_STOP])
+          last_active_modeset_num = modeset_num;
       }
   }
 }
@@ -397,10 +399,11 @@ void handle_long_press(char key_num, char modeset_num) {  // used by stop key
     }
   }
 }
-// handle pressed keys
+// Go through all keys and for pressed ones modify their state (mode)
 void manage_key_mode(char modeset_num) {
-  if(key[KEY_BELL])
+  if(key[KEY_BELL]) {
     switch_mode_while_visible(KEY_BELL, modeset_num);
+  }
   if(key[KEY_P]) {
     switch_mode(KEY_P, modeset_num);
   }
@@ -456,9 +459,9 @@ void display_based_on_mode(char from_led, char to_led, char modeset_num, char ke
         key_num = led_num + key_p_state * 10;
 
       if(key_num == KEY_BELL) {
-        if(key_countdown[key_num] > 0)
+        if(key_countdown[key_num] > 0)  // recently pressed
           leds[keymap[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]+1];
-        else
+        else                            // idle for long time
           leds[keymap[key_num]] = CRGB::Black;
       }
       else
@@ -1878,6 +1881,11 @@ void setup() {
       for(key_num=0; key_num<NUM_KEYS; key_num++) {
         mode[modeset_num][key_num] = 0;
       }
+      // preset some keys initially so base lights may be turned ON with one click
+      for(key_num=1; key_num<=6; key_num++) {
+        mode[MODESET_SWITCHES_1][key_num] = 1;
+      }
+      mode[MODESET_FUNCKEYS][KEY_BELL] = 1;  // set mode to first light bank
       
       for(ff=0; ff<NUM_KEYS; ff++) {
         key_countdown[ff] = MAX_KEY_COUNTDOWN;
@@ -2273,17 +2281,20 @@ void loop() {
             key_pressed = true;
         }
       }
-      display_based_on_floor(0, 10);
+      display_based_on_floor(0, 10);  // from key, to_key
       // uses: curr_floor, blink_state, sleep_countdown, blink_countdown, leds[], keymap[], floors[]
 
       // handle STOP key (KEY_STOP)
       manage_key_mode(MODESET_FLOOR_STOP);  // from key, to key, mode set
+      // display STOP key. In lift mode it uses MODESET_FLOOR_STOP modeset (only black color in this color set)
       display_based_on_mode(LED_STOP, LED_STOP, MODESET_FLOOR_STOP, mode[MODESET_FLOOR_STOP][KEY_P]);
     }
     else
     if(mode[0][KEY_BELL] == 1) {
       // Switch/Toggle mode
       manage_key_mode(MODESET_SWITCHES_1);  // from key, to key, mode set
+      // display keys from grround floor (LED_P) through numbered floors, up to LED_STOP
+      // All these keys use MODESET_SWITCHES_x modeset (color set) in non lift modes.
       display_based_on_mode(LED_P, LED_STOP, MODESET_SWITCHES_1, mode[MODESET_SWITCHES_1][KEY_P]);
     }
     else
