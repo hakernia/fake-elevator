@@ -1919,6 +1919,12 @@ void setup() {
       max_people_on_board = (NUM_PERSONS / 2) > 2 ? 2 : NUM_PERSONS / 2;
 
       set_plot_flag(&plot_flags, LIMITS_APPLY_FLAG); // start with people obeying lift limits
+
+      // Setup initial state of serial register (
+      for(ff=0; ff<NUM_KEYS; ff++) {
+        // energize polarity 0 (turn off) for all outputs
+        add_to_queue(ff, ENERGIZE_DURATION, 1, 0, 1); // bit_num, duration, exclusive, polarity, energize
+      }
 }
 
 
