@@ -365,6 +365,12 @@ void handle_queue(char key_num, char modeset_num) {  // used by individual digit
 }
 void all_digits_off() {
   for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
+      add_to_queue(ff-KEY_DIGIT_MIN, ENERGIZE_DURATION, 1, 0, 1);
+  }
+  mode[last_active_modeset_num][KEY_STOP] = 0;  // turn off STOP key in last modeset
+}
+void active_digits_off() {
+  for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
     if(mode[last_active_modeset_num][ff])
       add_to_queue(ff-KEY_DIGIT_MIN, ENERGIZE_DURATION, 1, 0, 1);
   }
@@ -374,7 +380,7 @@ void handle_queue_bulk(char key_num, char modeset_num) {  // used by stop key
   if(last_key[key_num] != key[key_num] &&    // just pressed or released
      key_press_countdown[key_num] > 0) {     // and no long press
       if(last_active_modeset_num != modeset_num)  // modeset changed
-        all_digits_off();                         // initially turn off previous modeset's keys
+        active_digits_off();                         // initially turn off previous modeset's keys
       // Update queue with all digits ON if key STOP is pressed
       for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
         if(mode[modeset_num][ff])                 // the key ff is ON
@@ -1684,8 +1690,8 @@ unsigned char bit_num[MAX_QUEUE];
 unsigned char queue_start = 0;
 unsigned char queue_end = queue_start;
 
-unsigned char map_key_to_sr[1][NUM_KEYS] = {{0, 
-                                            8, 7, 6, 4, 14, 12, 3, 15, 13, 11, 10, 9, 2, 5, 1,
+unsigned char map_key_to_sr[1][NUM_KEYS] = {{10, 
+                                            9, 8, 3, 13, 11, 2, 14, 12, 7, 6, 5, 1, 4, 0, 15,
                                             16, 17, 18, 19, 20, 21, 22}};
 
 // output buffer for shift register
@@ -1928,11 +1934,11 @@ void setup() {
 
       set_plot_flag(&plot_flags, LIMITS_APPLY_FLAG); // start with people obeying lift limits
 
-      // Setup initial state of serial register (
-      for(ff=0; ff<NUM_KEYS; ff++) {
-        // energize polarity 0 (turn off) for all outputs
-        add_to_queue(ff, ENERGIZE_DURATION, 1, 0, 1); // bit_num, duration, exclusive, polarity, energize
-      }
+      // Setup initial state of serial register
+      // Initiallly turn off all outputs
+      // but first call must turn on at least one output
+      add_to_queue(0, ENERGIZE_DURATION, 1, 1, 1);
+      all_digits_off();
 }
 
 
