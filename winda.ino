@@ -63,6 +63,7 @@ Wtv020sd16p wtv020sd16p(WTV_RESET_PIN, WTV_CLOCK_PIN, WTV_DATA_PIN, WTV_BUSY_PIN
 #define SHIFT_CLOCK_PIN  A4  // rising edge active
 #define SHIFT_LATCH_PIN  A6  // L - block, H - show
 #define SHIFT_DATA_PIN   10
+#define SHIFT_NUM_BITS   32
 
 // relays polarity
 #define POLARITY_ON_PIN    11  // L - active
@@ -1832,12 +1833,20 @@ void display_debug_2() {
 
 
 void setup() {
+      // set up the two polarity pins
+      pinMode(POLARITY_ON_PIN, OUTPUT);
+      pinMode(POLARITY_OFF_PIN, OUTPUT);
+      // turn off both pins ASAP
+      digitalWrite(POLARITY_ON_PIN, HIGH);
+      digitalWrite(POLARITY_OFF_PIN, HIGH);
+
+      // set up the output shift register pins
       pinMode(SHIFT_CLOCK_PIN, OUTPUT);
       pinMode(SHIFT_LATCH_PIN, OUTPUT);
       pinMode(SHIFT_DATA_PIN, OUTPUT);
-      pinMode(POLARITY_ON_PIN, OUTPUT);
-      pinMode(POLARITY_OFF_PIN, OUTPUT);
-  
+      send_to_sr(0);  // initialize all shift outputs to 0 ASAP to avoid initial undefined state
+
+      // set up the keyboard pins
       pinMode(ROW_1, INPUT); // only one row at a time will be switched to output
       pinMode(ROW_2, INPUT);
       pinMode(ROW_3, INPUT);
@@ -1931,8 +1940,8 @@ void setup() {
 
       set_plot_flag(&plot_flags, LIMITS_APPLY_FLAG); // start with people obeying lift limits
 
-      // Setup initial state of serial register (
-      for(ff=0; ff<NUM_KEYS; ff++) {
+      // Initially send OFF events to all shift outputs
+      for(ff=0; ff<SHIFT_NUM_BITS; ff++) {
         // energize polarity 0 (turn off) for all outputs
         add_to_queue(ff, ENERGIZE_DURATION, 1, 0, 1); // bit_num, duration, exclusive, polarity, energize
       }
