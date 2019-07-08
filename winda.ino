@@ -1661,7 +1661,7 @@ void activate_objs() {
 
 // Shift Register (SR) and event queue routines
 
-void send_to_sr(int data) {
+void send_to_sr(unsigned long data) {
   digitalWrite(SHIFT_LATCH_PIN, LOW);
   /*
   for(unsigned char ff = 0; ff<16; ff++) {
@@ -1672,6 +1672,8 @@ void send_to_sr(int data) {
   }
   */
   shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, data);
+  shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, (data >> 8));
+  shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, (data >> 8));
   shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, (data >> 8));
   digitalWrite(SHIFT_LATCH_PIN, HIGH);
 }
@@ -1685,15 +1687,16 @@ unsigned char queue_start = 0;
 unsigned char queue_end = queue_start;
 
 unsigned char map_key_to_sr[1][NUM_KEYS] = {{0, 
-                                            8, 7, 6, 4, 14, 12, 3, 15, 13, 11, 10, 9, 2, 5, 1,
-                                            16, 17, 18, 19, 20, 21, 22}};
+                                            8, 7, 6, 4, 14, 12, 3, 15, 13, 11, 10, 9, 2, 5, 1,  // 15 lights
+                                            16, 17, 18, 19, 20, // cold light, fan, ..., ..., ...
+                                            21, 22}};   // stop, ring
 
 // output buffer for shift register
-int sr_data = 0x0000;
+unsigned long sr_data = 0x00000000;  // 4 bytes
 
 // set polarity and single pin in shift register (sr)
 void set_sr_output_pin(int bit_num, char polarity, char energize) {
-  int mask = 1;
+  unsigned long mask = 1;
   // set polarity pin only if changed
   static char last_polarity;
   polarity = polarity > 0;
