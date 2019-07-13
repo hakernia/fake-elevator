@@ -326,6 +326,12 @@ unsigned long modeset[NUM_MODESETS][5] =
 #define MODESET_SWITCHES_3    3
 #define MODESET_FLOOR_STOP    4
 
+// mapping table: key num to shift register pin
+unsigned char map_key_to_sr[1][NUM_KEYS] = {{0, 
+                                            8, 7, 6, 4, 14, 12, 3, 15, 13, 11, 10, 9, 2, 5, 1,  // 15 lights
+                                            16, 17, 18, 19, 20, // cold light, fan, ..., ..., ...
+                                            21, 22}};   // stop, ring
+
 // set key to next color in given modeset
 void next_mode(char key_num, char modeset_num) {
   if(mode[modeset_num][key_num] < modeset[modeset_num][0]-1) 
@@ -356,18 +362,18 @@ void handle_queue(char key_num, char modeset_num) {  // used by individual digit
       if(mode[modeset_num][KEY_STOP])                             // key stop is active
       if(key_num >= KEY_DIGIT_MIN && key_num <= KEY_DIGIT_MAX) {  // number keys only
         if(mode[modeset_num][key_num]) {
-          add_to_queue(key_num-1, ENERGIZE_DURATION, 1, 1, 1); // bit_num, duration, exclusive, polarity, energize
+          add_to_queue(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1, 1, 1); // bit_num, duration, exclusive, polarity, energize
           last_active_modeset_num = modeset_num;
         }
         else
-          add_to_queue(key_num-1, ENERGIZE_DURATION, 1, 0, 1);
+          add_to_queue(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1, 0, 1);
       }
   }
 }
 void all_digits_off() {
   for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
     if(mode[last_active_modeset_num][ff])
-      add_to_queue(ff-KEY_DIGIT_MIN, ENERGIZE_DURATION, 1, 0, 1);
+      add_to_queue(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, 0, 1);
   }
   mode[last_active_modeset_num][KEY_STOP] = 0;  // turn off STOP key in last modeset
 }
@@ -379,7 +385,7 @@ void handle_queue_bulk(char key_num, char modeset_num) {  // used by stop key
       // Update queue with all digits ON if key STOP is pressed
       for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
         if(mode[modeset_num][ff])                 // the key ff is ON
-          add_to_queue(ff-KEY_DIGIT_MIN, ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
+          add_to_queue(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
         if(mode[modeset_num][KEY_STOP])
           last_active_modeset_num = modeset_num;
       }
@@ -393,7 +399,7 @@ void handle_long_press(char key_num, char modeset_num) {  // used by stop key
       if(mode[modeset_num][KEY_STOP] != mode[modeset_num][ff]) {
           // update to mode of the stop key
           next_mode(ff, modeset_num);
-          add_to_queue(ff-KEY_DIGIT_MIN, ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
+          add_to_queue(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
           if(mode[modeset_num][KEY_STOP])
             last_active_modeset_num = modeset_num;
       }
@@ -1687,11 +1693,6 @@ unsigned char bit_num[MAX_QUEUE];
 unsigned char queue_start = 0;
 unsigned char queue_end = queue_start;
 
-unsigned char map_key_to_sr[1][NUM_KEYS] = {{0, 
-                                            8, 7, 6, 4, 14, 12, 3, 15, 13, 11, 10, 9, 2, 5, 1,  // 15 lights
-                                            16, 17, 18, 19, 20, // cold light, fan, ..., ..., ...
-                                            21, 22}};   // stop, ring
-
 // output buffer for shift register
 unsigned long sr_data = 0x00000000;  // 4 bytes
 
@@ -1740,7 +1741,7 @@ void process_queue_tick() {
 
         // avoid repeating sending sr data
         if(8 & value[ff]) {
-          set_sr_output_pin(map_key_to_sr[0][bit_num[ff]], 2 & value[ff], 1 & value[ff]);
+          set_sr_output_pin(bit_num[ff], 2 & value[ff], 1 & value[ff]);
           value[ff] &= 0xF7; // 11110111 - clear init bit
         }
         
@@ -1751,7 +1752,7 @@ void process_queue_tick() {
       }
     }
     if(duration[ff] == 0) {
-      set_sr_output_pin(map_key_to_sr[0][bit_num[ff]], 0, 0);  // deenergize
+      set_sr_output_pin(bit_num[ff], 0, 0);  // deenergize
     }
     
     ff++;
