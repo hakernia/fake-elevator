@@ -18,15 +18,7 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
     Contact author at hakernia.pl@gmail.com
-	
-	
-	This revision:
-	  - vastly advanced story logic
-	  - changed comment numbering
-	  - most comments get true durations
-	  - introduce mystery floor 11
-	  - bug fixes, code cleanup
-	
+    
 *************************************************************************/
 
 #include "FastLED.h"
@@ -573,7 +565,6 @@ unsigned char spk_len[MAX_SPK] = {
 #define MAX_SPK_QUEUE 30
 int spk_que[MAX_SPK_QUEUE];
 unsigned char spk_que_len = 0;
-//long spk_que_pos = 0;
 long spk_countdown = -1;
 
 void add_spk(int spk_num) {
@@ -601,27 +592,13 @@ void spk_que_tick() {
   if(spk_que_len > 0 && spk_countdown == -1)
     spk_countdown = 0;
   if(spk_countdown == 0) {
-//wtv020sd16p.asyncPlayVoice(2);
     if(0 < spk_que_len) {
       spk = spk_que[0];
       spk_countdown = spk_len[ spk ] * 100;
-      /*
- if(spk_que[0] == 212 || spk_que[0] == 213) {
-   say_num(spk_len[spk]);
-   wtv020sd16p.asyncPlayVoice(104);
-   delay(100);
-   say_num(spk_len[213]);
-   wtv020sd16p.asyncPlayVoice(104);
-   delay(100);
-   say_num(spk_countdown);
- }
-      */
       wtv020sd16p.asyncPlayVoice(spk_que[0]);
-      memmove(&spk_que[0], &spk_que[1], sizeof(spk_que[1])*(spk_que_len-1));  // thanks to this line spk_qie_pos is always 0
+      memmove(&spk_que[0], &spk_que[1], sizeof(spk_que[1])*(spk_que_len-1));
       spk_que_len--;
-      //spk_que_pos++;
     } else {
-      //wtv020sd16p.stopVoice();
       spk_countdown = -1;  // don't get in here again until spk_que_len gets > 0
     }
   } else {
@@ -1670,14 +1647,6 @@ void activate_objs() {
 
 void send_to_sr(unsigned long data) {
   digitalWrite(SHIFT_LATCH_PIN, LOW);
-  /*
-  for(unsigned char ff = 0; ff<16; ff++) {
-    digitalWrite(SHIFT_CLOCK_PIN, LOW);
-    digitalWrite(SHIFT_DATA_PIN, (data & 1));
-    digitalWrite(SHIFT_CLOCK_PIN, HIGH);
-    data >>= 1;
-  }
-  */
   shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, data);
   shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, (data >> 8));
   shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, (data >> 8));
@@ -1701,7 +1670,7 @@ void set_sr_output_pin(int bit_num, char polarity, char energize) {
   unsigned long mask = 1;
   // set polarity pin only if changed
   static char last_polarity;
-  polarity = polarity > 0;
+  polarity = polarity > 0;  // normalize value to 0..1
   if(polarity != last_polarity) {
     // turn off both polarity pins to avoid both ON
     digitalWrite(POLARITY_ON_PIN, HIGH);
@@ -1861,33 +1830,8 @@ void setup() {
       pinMode(COL_3, INPUT_PULLUP);
       pinMode(COL_4, INPUT_PULLUP);
       
-      // Uncomment/edit one of the following lines for your leds arrangement.
-      // FastLED.addLeds<TM1803, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<TM1804, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<TM1809, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<WS2811, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<WS2812B, DATA_PIN, RGB>(leds, NUM_LEDS);
+      // Initialize LED library
       FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
-      // FastLED.addLeds<APA104, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<UCS1903, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<UCS1903B, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<GW6205, DATA_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<GW6205_400, DATA_PIN, RGB>(leds, NUM_LEDS);
-      
-      // FastLED.addLeds<WS2801, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<SM16716, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<LPD8806, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<P9813, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<APA102, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<DOTSTAR, RGB>(leds, NUM_LEDS);
-
-      // FastLED.addLeds<WS2801, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<SM16716, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<LPD8806, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<P9813, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<APA102, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
-      // FastLED.addLeds<DOTSTAR, DATA_PIN, CLOCK_PIN, RGB>(leds, NUM_LEDS);
 
       // initialize each key's mode
       for(modeset_num=0; modeset_num < NUM_MODESETS; modeset_num++)
@@ -1907,7 +1851,6 @@ void setup() {
         key_press_countdown[ff] = MAX_KEY_PRESS_COUNTDOWN;
       }
 
-      
       // blink all LEDs to indicate the program start
       for(ff=0; ff<NUM_LEDS; ff++) {
         leds[ff] = CRGB::White;
@@ -1919,26 +1862,13 @@ void setup() {
       }
       FastLED.show();
 
-
       // Initializes the wtv sound module
       wtv020sd16p.reset();
-      //memset(spk_len, 8, sizeof(spk_len)); // set default for all; test purposes only
-      /*
-      memset(&spk_len[0], 0, sizeof(spk_len[0]) * 40); 
-      memset(&spk_len[40], 1, sizeof(spk_len[0]) * 40); 
-      memset(&spk_len[80], 2, sizeof(spk_len[0]) * 40); 
-      memset(&spk_len[120], 3, sizeof(spk_len[0]) * 40); 
-      memset(&spk_len[160], 4, sizeof(spk_len[0]) * 40); 
-      memset(&spk_len[200], 8, sizeof(spk_len[0]) * 40); 
-      memset(&spk_len[240], 6, sizeof(spk_len[0]) * 40); 
-      memset(&spk_len[280], 7, sizeof(spk_len[0]) * 40); 
-      memset(&spk_len[320], 8, sizeof(spk_len[0]) * 40); 
-      memset(&spk_len[360], 9, sizeof(spk_len[0]) * 40); 
-      */
       clear_lift_world_queues();
       people_on_board = 0;
       max_people_on_board = (NUM_PERSONS / 2) > 2 ? 2 : NUM_PERSONS / 2;
 
+      // Initialize the plot related data
       set_plot_flag(&plot_flags, LIMITS_APPLY_FLAG); // start with people obeying lift limits
 
       // Initially send OFF events to all shift outputs
@@ -1962,17 +1892,7 @@ void loop() {
   spk_que_tick();
 
   
-  // aktualizuj target podczas ruchu w dana strone
-  /*
-  if(target_floor != curr_floor) {
-    if(dir == 1)
-      target_floor = is_above(curr_floor);
-    else
-      target_floor = is_below(curr_floor);
-  }
-  else
-  */
-  // znajdz nowy target po osiagnieciu poprzedniego
+  // find new target floor after reaching the previous target
   if(true) {
     if(dir == 1) {
       if((target_floor = is_above(curr_floor)) == -1) {
@@ -2060,18 +1980,6 @@ void loop() {
            if(is_speaking())
              state_countdown = 500;  // keep waiting until communicating object moves
            if(state_countdown == 0) {
-            /*
-            if(passengers_to_go > 0) {
-               last_state = RESTART_THIS_STATE;
-               state = PASSENGERS_MOVEMENT;
-               passengers_to_go--;
-               wtv020sd16p.asyncPlayVoice(7);  // sound of moving passengers
-             } else
-             if(target_floor != curr_floor) {
-               state = DOOR_CLOSING;
-               wtv020sd16p.asyncPlayVoice(4);  // the sound of closing door
-             }
-             */
              if(target_floor != curr_floor) {
                state = DOOR_CLOSING;
                wtv020sd16p.asyncPlayVoice(MSG_DOOR_CLOSE);  // the sound of closing door
@@ -2264,15 +2172,6 @@ void loop() {
   mapPhysKeyToKey(mode[0][KEY_BELL],            // key 22 - bell, its state determines mode
                   mode[ mode[0][KEY_BELL] ][0]);  // key 0 - P, its state determines digits bank
 
-/*
-  if(key[11]) {
-    switch_mode_while_visible(11, mode[0][KEY_BELL]);
-    // DEBUG DISPLAY for key 11
-    // debug display - mark target floor with the LED on the keypad
-    leds[keymap[target_floor]] = CRGB::Green;
-  } 
-  else
-*/
   if(key[KEY_BELL]) {
     // Switch mode only if pressed while lit.
     switch_mode_while_visible(KEY_BELL, MODESET_FUNCKEYS);
