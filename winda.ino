@@ -362,18 +362,18 @@ void handle_queue(char key_num, char modeset_num) {  // used by individual digit
       if(mode[modeset_num][KEY_STOP])                             // key stop is active
       if(key_num >= KEY_DIGIT_MIN && key_num <= KEY_DIGIT_MAX) {  // number keys only
         if(mode[modeset_num][key_num]) {
-          add_to_queue(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1, 1, 1); // bit_num, duration, exclusive, polarity, energize
+          add_to_event_ring(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1, 1, 1); // bit_num, duration, exclusive, polarity, energize
           last_active_modeset_num = modeset_num;
         }
         else
-          add_to_queue(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1, 0, 1);
+          add_to_event_ring(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1, 0, 1);
       }
   }
 }
 void all_digits_off() {
   for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
     if(mode[last_active_modeset_num][ff])
-      add_to_queue(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, 0, 1);
+      add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, 0, 1);
   }
   mode[last_active_modeset_num][KEY_STOP] = 0;  // turn off STOP key in last modeset
 }
@@ -385,7 +385,7 @@ void handle_queue_bulk(char key_num, char modeset_num) {  // used by stop key
       // Update queue with all digits ON if key STOP is pressed
       for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
         if(mode[modeset_num][ff])                 // the key ff is ON
-          add_to_queue(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
+          add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
         if(mode[modeset_num][KEY_STOP])
           last_active_modeset_num = modeset_num;
       }
@@ -399,7 +399,7 @@ void handle_long_press(char key_num, char modeset_num) {  // used by stop key
       if(mode[modeset_num][KEY_STOP] != mode[modeset_num][ff]) {
           // update to mode of the stop key
           next_mode(ff, modeset_num);
-          add_to_queue(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
+          add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
           if(mode[modeset_num][KEY_STOP])
             last_active_modeset_num = modeset_num;
       }
@@ -1666,7 +1666,7 @@ void activate_objs() {
 
 
 
-// Shift Register (SR) and event queue routines
+// Shift Register (SR) and event ring routines
 
 void send_to_sr(unsigned long data) {
   digitalWrite(SHIFT_LATCH_PIN, LOW);
@@ -1685,13 +1685,13 @@ void send_to_sr(unsigned long data) {
   digitalWrite(SHIFT_LATCH_PIN, HIGH);
 }
 
-// queue buffers
-#define MAX_QUEUE 64
-int duration[MAX_QUEUE];
-unsigned char value[MAX_QUEUE] = {0};  // bit 2 - exclusive, bit 1 - polarity, bit 0 - energize
-unsigned char bit_num[MAX_QUEUE];
-unsigned char queue_start = 0;
-unsigned char queue_end = queue_start;
+// event ring buffers
+#define MAX_ERING 64
+int duration[MAX_ERING];
+unsigned char value[MAX_ERING] = {0};  // bit 2 - exclusive, bit 1 - polarity, bit 0 - energize
+unsigned char bit_num[MAX_ERING];
+unsigned char ering_head = 0;
+unsigned char ering_tail = ering_head;
 
 // output buffer for shift register
 unsigned long sr_data = 0x00000000;  // 4 bytes
@@ -1728,15 +1728,15 @@ void set_sr_output_pin(int bit_num, char polarity, char energize) {
 // >0 - energize or deenergize it and countdown
 // 0 - deenergize it and remove
 // <0 - energize or deenergize and remove
-void process_queue_tick() {
-  //for(unsigned char ff = queue_start; ff < MAX_QUEUE; ff++) 
-  unsigned char ff = queue_start;
+void process_event_ring_tick() {
+  //for(unsigned char ff = ering_head; ff < MAX_ERING; ff++) 
+  unsigned char ff = ering_head;
   unsigned char excl = 0;
-  while ((ff != queue_end) && !excl) {
+  while ((ff != ering_tail) && !excl) {
     if(duration[ff]) {
       // nonzero duration - process it
       excl = ((4 & value[ff]) > 0);
-      if(excl && (ff == queue_start) ||  // do exclusive bits only if first in queue
+      if(excl && (ff == ering_head) ||  // do exclusive bits only if first in queue
         !excl) {             // nonexclusive are always fine
 
         // avoid repeating sending sr data
@@ -1756,39 +1756,39 @@ void process_queue_tick() {
     }
     
     ff++;
-    if(ff == MAX_QUEUE)
+    if(ff == MAX_ERING)
       ff = 0;
   }
 }
-void clean_queue() {
+void clean_event_ring() {
   unsigned char excl = 0;
-  while (queue_start != queue_end && !excl) {
-    excl = ((4 & value[queue_start]) > 0);
-    if(duration[queue_start] <= 0) {
-      bit_num[queue_start] = 0;
-      duration[queue_start] = 0;
-      value[queue_start] = 0;
+  while (ering_head != ering_tail && !excl) {
+    excl = ((4 & value[ering_head]) > 0);
+    if(duration[ering_head] <= 0) {
+      bit_num[ering_head] = 0;
+      duration[ering_head] = 0;
+      value[ering_head] = 0;
       excl = 0;
     }
     if(excl == 0) {
-      queue_start++;
-      if(queue_start == MAX_QUEUE)
-        queue_start = 0;
+      ering_head++;
+      if(ering_head == MAX_ERING)
+        ering_head = 0;
     }
   }
 }
 
-int add_to_queue(char new_bit_num, int new_duration, char exclusive, char polarity, char energize) {
-  if(queue_end < MAX_QUEUE - 1 && queue_end != queue_start -1 ||
-     queue_end == MAX_QUEUE - 1 && queue_start != 0) {
-    bit_num[queue_end] = new_bit_num;
-    duration[queue_end] = new_duration;
+int add_to_event_ring(char new_bit_num, int new_duration, char exclusive, char polarity, char energize) {
+  if(ering_tail < MAX_ERING - 1 && ering_tail != ering_head -1 ||
+     ering_tail == MAX_ERING - 1 && ering_head != 0) {
+    bit_num[ering_tail] = new_bit_num;
+    duration[ering_tail] = new_duration;
     // bit 3 (val 8) indicates initialization
-    value[queue_end] = (unsigned char) (8 + ((exclusive > 0) << 2) + ((polarity > 0) << 1) + (energize > 0));
+    value[ering_tail] = (unsigned char) (8 + ((exclusive > 0) << 2) + ((polarity > 0) << 1) + (energize > 0));
 
-    queue_end++;
-    if(queue_end == MAX_QUEUE)
-      queue_end = 0;
+    ering_tail++;
+    if(ering_tail == MAX_ERING)
+      ering_tail = 0;
   }
 }
 
@@ -1812,17 +1812,17 @@ void display_debug_2() {
 
     
     unsigned char dd = 0;
-    for (unsigned char ff=0; ff < MAX_QUEUE; ff++) {
+    for (unsigned char ff=0; ff < MAX_ERING; ff++) {
       if(duration[ff] > 0)
         dd++;
     }
     if(dd < NUM_KEYS)
       leds[keymap[dd]] = CRGB::Blue;
 
-    if(queue_start < NUM_KEYS)
-      leds[keymap[queue_start]] = CRGB::Green;
-    if(queue_end < NUM_KEYS)
-      leds[keymap[queue_end]] = CRGB::Red;
+    if(ering_head < NUM_KEYS)
+      leds[keymap[ering_head]] = CRGB::Green;
+    if(ering_tail < NUM_KEYS)
+      leds[keymap[ering_tail]] = CRGB::Red;
 
     leds[0] = CRGB::Blue;
 }
@@ -1944,7 +1944,7 @@ void setup() {
       // Initially send OFF events to all shift outputs
       for(ff=0; ff<SHIFT_NUM_BITS; ff++) {
         // energize polarity 0 (turn off) for all outputs
-        add_to_queue(ff, ENERGIZE_DURATION, 1, 0, 1); // bit_num, duration, exclusive, polarity, energize
+        add_to_event_ring(ff, ENERGIZE_DURATION, 1, 0, 1); // bit_num, duration, exclusive, polarity, energize
       }
 }
 
@@ -1953,9 +1953,9 @@ void setup() {
 
 void loop() {
 
-  // process switch event queue
-  process_queue_tick();
-  clean_queue();
+  // process switch event ring
+  process_event_ring_tick();
+  clean_event_ring();
   //send_to_sr(0xff00);
 
   // process speaking queue
