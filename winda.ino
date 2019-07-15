@@ -354,7 +354,7 @@ void handle_queue(char key_num, char modeset_num) {  // used by individual digit
       if(mode[modeset_num][KEY_STOP])                             // key stop is active
       if(key_num >= KEY_DIGIT_MIN && key_num <= KEY_DIGIT_MAX) {  // number keys only
         if(mode[modeset_num][key_num]) {
-          add_to_event_ring(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1, 1, 1); // bit_num, duration, exclusive, polarity, energize
+          add_to_event_ring(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1, 1, 1); // sr_pin_num, duration, exclusive, polarity, energize
           last_active_modeset_num = modeset_num;
         }
         else
@@ -1657,8 +1657,8 @@ void send_to_sr(unsigned long data) {
 // event ring buffers
 #define MAX_ERING 64
 int duration[MAX_ERING];
-unsigned char value[MAX_ERING] = {0};  // bit 2 - exclusive, bit 1 - polarity, bit 0 - energize
-unsigned char bit_num[MAX_ERING];
+unsigned char sr_pin_state[MAX_ERING] = {0};  // bit 2 - exclusive, bit 1 - polarity, bit 0 - energize
+unsigned char sr_pin_num[MAX_ERING];
 unsigned char ering_head = 0;
 unsigned char ering_tail = ering_head;
 
@@ -1666,7 +1666,7 @@ unsigned char ering_tail = ering_head;
 unsigned long sr_data = 0x00000000;  // 4 bytes
 
 // set polarity and single pin in shift register (sr)
-void set_sr_output_pin(int bit_num, char polarity, char energize) {
+void set_sr_output_pin(int sr_pin_num, char polarity, char energize) {
   unsigned long mask = 1;
   // set polarity pin only if changed
   static char last_polarity;
@@ -1685,10 +1685,10 @@ void set_sr_output_pin(int bit_num, char polarity, char energize) {
 
   // set shift register data
   if(energize > 0) {
-    sr_data = sr_data | (mask << bit_num);  // move single 1 num bits
+    sr_data = sr_data | (mask << sr_pin_num);  // move single 1 num bits
   }
   else {
-    sr_data = sr_data & (0xffffffff ^ (mask << bit_num)); // move single 1 num bits and invert all
+    sr_data = sr_data & (0xffffffff ^ (mask << sr_pin_num)); // move single 1 num bits and invert all
     sr_data = 0;
   }
   send_to_sr(sr_data);
@@ -1704,14 +1704,14 @@ void process_event_ring_tick() {
   while ((ff != ering_tail) && !excl) {
     if(duration[ff]) {
       // nonzero duration - process it
-      excl = ((4 & value[ff]) > 0);
+      excl = ((4 & sr_pin_state[ff]) > 0);
       if(excl && (ff == ering_head) ||  // do exclusive bits only if first in queue
         !excl) {             // nonexclusive are always fine
 
         // avoid repeating sending sr data
-        if(8 & value[ff]) {
-          set_sr_output_pin(bit_num[ff], 2 & value[ff], 1 & value[ff]);
-          value[ff] &= 0xF7; // 11110111 - clear init bit
+        if(8 & sr_pin_state[ff]) {
+          set_sr_output_pin(sr_pin_num[ff], 2 & sr_pin_state[ff], 1 & sr_pin_state[ff]);
+          sr_pin_state[ff] &= 0xF7; // 11110111 - clear init bit
         }
         
         if(duration[ff] > 0)
@@ -1721,7 +1721,7 @@ void process_event_ring_tick() {
       }
     }
     if(duration[ff] == 0) {
-      set_sr_output_pin(bit_num[ff], 0, 0);  // deenergize
+      set_sr_output_pin(sr_pin_num[ff], 0, 0);  // deenergize
     }
     
     ff++;
@@ -1732,11 +1732,11 @@ void process_event_ring_tick() {
 void clean_event_ring() {
   unsigned char excl = 0;
   while (ering_head != ering_tail && !excl) {
-    excl = ((4 & value[ering_head]) > 0);
+    excl = ((4 & sr_pin_state[ering_head]) > 0);
     if(duration[ering_head] <= 0) {
-      bit_num[ering_head] = 0;
+      sr_pin_num[ering_head] = 0;
       duration[ering_head] = 0;
-      value[ering_head] = 0;
+      sr_pin_state[ering_head] = 0;
       excl = 0;
     }
     if(excl == 0) {
@@ -1747,13 +1747,13 @@ void clean_event_ring() {
   }
 }
 
-int add_to_event_ring(char new_bit_num, int new_duration, char exclusive, char polarity, char energize) {
+int add_to_event_ring(char new_sr_pin_num, int new_duration, char exclusive, char polarity, char energize) {
   if(ering_tail < MAX_ERING - 1 && ering_tail != ering_head -1 ||
      ering_tail == MAX_ERING - 1 && ering_head != 0) {
-    bit_num[ering_tail] = new_bit_num;
+    sr_pin_num[ering_tail] = new_sr_pin_num;
     duration[ering_tail] = new_duration;
     // bit 3 (val 8) indicates initialization
-    value[ering_tail] = (unsigned char) (8 + ((exclusive > 0) << 2) + ((polarity > 0) << 1) + (energize > 0));
+    sr_pin_state[ering_tail] = (unsigned char) (8 + ((exclusive > 0) << 2) + ((polarity > 0) << 1) + (energize > 0));
 
     ering_tail++;
     if(ering_tail == MAX_ERING)
@@ -1874,7 +1874,7 @@ void setup() {
       // Initially send OFF events to all shift outputs
       for(ff=0; ff<SHIFT_NUM_BITS; ff++) {
         // energize polarity 0 (turn off) for all outputs
-        add_to_event_ring(ff, ENERGIZE_DURATION, 1, 0, 1); // bit_num, duration, exclusive, polarity, energize
+        add_to_event_ring(ff, ENERGIZE_DURATION, 1, 0, 1); // sr_pin_num, duration, exclusive, polarity, energize
       }
 }
 
