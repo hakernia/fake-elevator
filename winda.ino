@@ -1701,10 +1701,16 @@ void process_event_ring_tick() {
   //for(unsigned char ff = ering_head; ff < MAX_ERING; ff++) 
   unsigned char ff = ering_head;
   unsigned char excl = 0;
+
+  // turn off both polarity pins if all events are done
+  if(ering_head == ering_tail) {
+    digitalWrite(POLARITY_ON_PIN, HIGH);
+    digitalWrite(POLARITY_OFF_PIN, HIGH);
+  }
   while ((ff != ering_tail) && !excl) {
     if(duration[ff]) {
       // nonzero duration - process it
-      excl = ((4 & sr_pin_state[ff]) > 0);
+      excl = ((4 & sr_pin_state[ff]) > 0);  // normalize value to 0/1
       if(excl && (ff == ering_head) ||  // do exclusive bits only if first in queue
         !excl) {             // nonexclusive are always fine
 
