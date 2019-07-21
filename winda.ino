@@ -151,8 +151,8 @@ char last_active_modeset_num = 0;
 
 
 
-int add_to_event_ring(char new_sr_pin_num, int new_duration, char exclusive, char polarity, char energize);
-
+//int add_to_event_ring(char new_sr_pin_num, int new_duration, char polarity);
+int switch_sr_pin(char pin_num, char onoff);
 
 
 void readKbd() {
@@ -357,18 +357,21 @@ void handle_queue(char key_num, char modeset_num) {  // used by individual digit
       if(mode[modeset_num][KEY_STOP])                             // key stop is active
       if(key_num >= KEY_DIGIT_MIN && key_num <= KEY_DIGIT_MAX) {  // number keys only
         if(mode[modeset_num][key_num]) {
-          add_to_event_ring(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1, 1, 1); // sr_pin_num, duration, exclusive, polarity, energize
+          //add_to_event_ring(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1); // sr_pin_num, duration, polarity
+          switch_sr_pin(map_key_to_sr[0][key_num-1], 1); // sr_pin_num, polarity
           last_active_modeset_num = modeset_num;
         }
         else
-          add_to_event_ring(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1, 0, 1);
+          //add_to_event_ring(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 0);
+          switch_sr_pin(map_key_to_sr[0][key_num-1], 0); // sr_pin_num, polarity
       }
   }
 }
 void all_digits_off() {
   for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
     if(mode[last_active_modeset_num][ff])
-      add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, 0, 1);
+      //add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 0);
+      switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], 0);
   }
   mode[last_active_modeset_num][KEY_STOP] = 0;  // turn off STOP key in last modeset
 }
@@ -380,7 +383,8 @@ void handle_queue_bulk(char key_num, char modeset_num) {  // used by stop key
       // Update queue with all digits ON if key STOP is pressed
       for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
         if(mode[modeset_num][ff])                 // the key ff is ON
-          add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
+          //add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, mode[modeset_num][KEY_STOP]);
+          switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], mode[modeset_num][KEY_STOP]);
         if(mode[modeset_num][KEY_STOP])
           last_active_modeset_num = modeset_num;
       }
@@ -394,7 +398,8 @@ void handle_long_press(char key_num, char modeset_num) {  // used by stop key
       if(mode[modeset_num][KEY_STOP] != mode[modeset_num][ff]) {
           // update to mode of the stop key
           next_mode(ff, modeset_num);
-          add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 1, mode[modeset_num][KEY_STOP], 1);
+          //add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, mode[modeset_num][KEY_STOP]);
+          switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], mode[modeset_num][KEY_STOP]);
           if(mode[modeset_num][KEY_STOP])
             last_active_modeset_num = modeset_num;
       }
@@ -1712,41 +1717,21 @@ void set_sr_output_pin(int sr_pin_num, char polarity, char energize) {
 // 0 - deenergize it and remove
 // <0 - energize or deenergize and remove
 void process_event_ring_tick() {
-  //for(unsigned char ff = ering_head; ff < MAX_ERING; ff++) 
-  unsigned char ff = ering_head;
-  unsigned char excl = 0;
-
-  // turn off both polarity pins if all events are done
-  if(ering_head == ering_tail) {
-    digitalWrite(POLARITY_ON_PIN, LOW);
-    digitalWrite(POLARITY_OFF_PIN, LOW);
-  }
-  while ((ff != ering_tail) && !excl) {
-    if(duration[ff]) {
-      // nonzero duration - process it
-      excl = ((4 & sr_pin_state[ff]) > 0);  // normalize value to 0/1
-      if(excl && (ff == ering_head) ||  // do exclusive bits only if first in queue
-        !excl) {             // nonexclusive are always fine
-
-        // avoid repeating sending sr data
-        if(8 & sr_pin_state[ff]) {
-          set_sr_output_pin(sr_pin_num[ff], 2 & sr_pin_state[ff], 1 & sr_pin_state[ff]);
-          sr_pin_state[ff] &= 0xF7; // 11110111 - clear init bit
-        }
-        
-        if(duration[ff] > 0)
-        {
-          duration[ff]--; // countdown
-        }
-      }
-    } else {   // duration[ff] == 0
-      set_sr_output_pin(sr_pin_num[ff], -1, 0);  // clear polarity, deenergize
+  if(ering_head == ering_tail)
+    return;
+  if(duration[ering_head]) {
+    // avoid repeating sending sr data
+    if(8 & sr_pin_state[ering_head]) {
+      set_sr_output_pin(sr_pin_num[ering_head], 2 & sr_pin_state[ering_head], 1); // set requested polarity, energize
+      sr_pin_state[ering_head] &= 0xF7; // 11110111 - clear init bit
     }
-    
-    ff++;
-    if(ff == MAX_ERING)
-      ff = 0;
-  }
+    duration[ering_head]--; // countdown
+  } else {
+    set_sr_output_pin(sr_pin_num[ering_head], -1, 0);  // clear polarity, deenergize
+    ering_head++;
+    if(ering_head == MAX_ERING)
+      ering_head = 0;
+  }    
 }
 
 /*
@@ -1773,13 +1758,13 @@ void clean_event_ring() {
  *     >0 - deenergize after time elapses
  *     <0 - deenergize on deenergize event
  */
-int add_to_event_ring(char new_sr_pin_num, int new_duration, char exclusive, char polarity, char energize) {
+int add_to_event_ring(char new_sr_pin_num, int new_duration, char polarity) {
   if(ering_tail < MAX_ERING - 1 && ering_tail != ering_head -1 ||
      ering_tail == MAX_ERING - 1 && ering_head != 0) {
     sr_pin_num[ering_tail] = new_sr_pin_num;
     duration[ering_tail] = new_duration;
     // bit 3 (val 8) indicates initialization
-    sr_pin_state[ering_tail] = (unsigned char) (8 + ((exclusive > 0) << 2) + ((polarity > 0) << 1) + (energize > 0));
+    sr_pin_state[ering_tail] = (unsigned char) (8 + ((polarity > 0) << 1));
 
     ering_tail++;
     if(ering_tail == MAX_ERING)
@@ -1790,7 +1775,7 @@ int add_to_event_ring(char new_sr_pin_num, int new_duration, char exclusive, cha
 int switch_sr_pin(char pin_num, char onoff) {
   if(is_plot_flag(&SR_PIN_TYPES, pin_num)) {
     // bistable relay; use ring to time the output value
-    add_to_event_ring(pin_num, ENERGIZE_DURATION, 1, onoff, 1);
+    add_to_event_ring(pin_num, ENERGIZE_DURATION, onoff);
   } else {
     // regular bool; just set or clear
     set_sr_output_pin(pin_num, POLARITY_IGNORE, onoff);
@@ -1852,7 +1837,7 @@ void setup() {
       pinMode(SHIFT_CLOCK_PIN, OUTPUT);
       pinMode(SHIFT_LATCH_PIN, OUTPUT);
       pinMode(SHIFT_DATA_PIN, OUTPUT);
-      send_to_sr(0);  // initialize all shift outputs to 0 ASAP to avoid initial undefined state
+      send_to_sr(0x00000000);  // initialize all shift outputs to 0 ASAP to avoid initial undefined state
 
       // set up the keyboard pins
       pinMode(ROW_1, INPUT); // only one row at a time will be switched to output
@@ -1912,7 +1897,8 @@ void setup() {
       // Initially send OFF events to all shift outputs
       for(ff=0; ff<SHIFT_NUM_BITS; ff++) {
         // energize polarity 0 (turn off) for all outputs
-        add_to_event_ring(ff, ENERGIZE_DURATION, 1, 0, 1); // sr_pin_num, duration, exclusive, polarity, energize
+        //add_to_event_ring(ff, ENERGIZE_DURATION, 0); // sr_pin_num, duration, polarity
+        switch_sr_pin(ff, 0);
       }
 }
 
@@ -1923,7 +1909,7 @@ void loop() {
 
   // process switch event ring
   process_event_ring_tick();
-  clean_event_ring();
+  //clean_event_ring();
   //send_to_sr(0xff00);
 
   // process speaking queue
