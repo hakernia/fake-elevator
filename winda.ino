@@ -1665,7 +1665,7 @@ void send_to_sr(unsigned long data) {
 // event ring buffers
 #define MAX_ERING 64
 int duration[MAX_ERING];
-unsigned char sr_pin_state[MAX_ERING] = {0};  // bit 2 - exclusive, bit 1 - polarity, bit 0 - energize
+unsigned char sr_pin_state[MAX_ERING] = {0};  // bit 4 - init, bit 1 - polarity
 unsigned char sr_pin_num[MAX_ERING];
 unsigned char ering_head = 0;
 unsigned char ering_tail = ering_head;
@@ -1675,6 +1675,7 @@ unsigned long sr_data = 0x00000000;  // 4 bytes
 // sr pin types; determined by attached hardware; handle mindfully!
 unsigned long SR_PIN_TYPES = 0x00FFFFFF;  // 0 - regular bool, 1 - bistable relay
 
+#define POLARITY_CLEAR   -1
 #define POLARITY_IGNORE  -2
 /* 
  * Set polarity and single pin in shift register (sr)
@@ -1727,7 +1728,7 @@ void process_event_ring_tick() {
     }
     duration[ering_head]--; // countdown
   } else {
-    set_sr_output_pin(sr_pin_num[ering_head], -1, 0);  // clear polarity, deenergize
+    set_sr_output_pin(sr_pin_num[ering_head], POLARITY_CLEAR, 0);  // clear polarity, deenergize
     ering_head++;
     if(ering_head == MAX_ERING)
       ering_head = 0;
@@ -1737,6 +1738,7 @@ void process_event_ring_tick() {
 /*
  * If used up, clear the ring entry and move head towards tail
  */
+ /*
 void clean_event_ring() {
   unsigned char excl = 0;
   unsigned char excl_used = 0;
@@ -1749,6 +1751,7 @@ void clean_event_ring() {
       ering_head = 0;
   }
 }
+*/
 
 /*
  * Event (pin) types:
