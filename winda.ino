@@ -58,8 +58,8 @@ Wtv020sd16p wtv020sd16p(WTV_RESET_PIN, WTV_CLOCK_PIN, WTV_DATA_PIN, WTV_BUSY_PIN
 #define SHIFT_NUM_BITS   32
 
 // relays polarity
-#define POLARITY_ON_PIN    11  // L - active
-#define POLARITY_OFF_PIN   13  // L - active
+#define POLARITY_ON_PIN    11  // H - active
+#define POLARITY_OFF_PIN   13  // H - active
 
 #define ENERGIZE_DURATION  35  // 30 - 72ms, 35 - 84ms  -> 5 - 12ms
 
@@ -149,6 +149,9 @@ char ff;
 char modeset_num = 0;
 char last_active_modeset_num = 0;
 
+
+
+int add_to_event_ring(char new_sr_pin_num, int new_duration, char exclusive, char polarity, char energize);
 
 
 
@@ -1664,30 +1667,41 @@ unsigned char ering_tail = ering_head;
 
 // output buffer for shift register
 unsigned long sr_data = 0x00000000;  // 4 bytes
+// sr pin types; determined by attached hardware; handle mindfully!
+unsigned long SR_PIN_TYPES = 0x00FFFFFF;  // 0 - regular bool, 1 - bistable relay
 
-// set polarity and single pin in shift register (sr)
+#define POLARITY_IGNORE  -2
+/* 
+ * Set polarity and single pin in shift register (sr)
+ * polarity:
+ *   > 0 - set OFF
+ *     0 - set ON
+ *    -1 - set NONE
+ *   <-1 - ignore polarity
+ *   
+ */
 void set_sr_output_pin(int sr_pin_num, char polarity, char energize) {
   unsigned long mask = 1;
-  // set polarity pin only if changed
-  static char last_polarity;
-  polarity = polarity > 0;  // normalize value to 0..1
-  if(polarity != last_polarity) {
-    // turn off both polarity pins to avoid both ON
-    digitalWrite(POLARITY_ON_PIN, HIGH);
-    digitalWrite(POLARITY_OFF_PIN, HIGH);
-    // turn on single one
-    if(polarity)
+
+    // set proper polarity pin
+    if(polarity > 0) {
       digitalWrite(POLARITY_ON_PIN, LOW);
-    else
+      digitalWrite(POLARITY_OFF_PIN, HIGH); // set the OFF polarity
+    } else if(polarity == 0) {
       digitalWrite(POLARITY_OFF_PIN, LOW);
-    last_polarity = (polarity > 0);
-  }
+      digitalWrite(POLARITY_ON_PIN, HIGH);  // set the ON polarity
+    } else if(polarity == -1) {
+      digitalWrite(POLARITY_ON_PIN, LOW);   // clear both polarity pins
+      digitalWrite(POLARITY_OFF_PIN, LOW);
+    }
 
   // set shift register data
   if(energize > 0) {
+    // set output pin
     sr_data = sr_data | (mask << sr_pin_num);  // move single 1 num bits
   }
   else {
+    // clear output pin
     sr_data = sr_data & (0xffffffff ^ (mask << sr_pin_num)); // move single 1 num bits and invert all
     sr_data = 0;
   }
@@ -1704,8 +1718,8 @@ void process_event_ring_tick() {
 
   // turn off both polarity pins if all events are done
   if(ering_head == ering_tail) {
-    digitalWrite(POLARITY_ON_PIN, HIGH);
-    digitalWrite(POLARITY_OFF_PIN, HIGH);
+    digitalWrite(POLARITY_ON_PIN, LOW);
+    digitalWrite(POLARITY_OFF_PIN, LOW);
   }
   while ((ff != ering_tail) && !excl) {
     if(duration[ff]) {
@@ -1725,9 +1739,8 @@ void process_event_ring_tick() {
           duration[ff]--; // countdown
         }
       }
-    }
-    if(duration[ff] == 0) {
-      set_sr_output_pin(sr_pin_num[ff], 0, 0);  // deenergize
+    } else {   // duration[ff] == 0
+      set_sr_output_pin(sr_pin_num[ff], -1, 0);  // clear polarity, deenergize
     }
     
     ff++;
@@ -1735,24 +1748,31 @@ void process_event_ring_tick() {
       ff = 0;
   }
 }
+
+/*
+ * If used up, clear the ring entry and move head towards tail
+ */
 void clean_event_ring() {
   unsigned char excl = 0;
-  while (ering_head != ering_tail && !excl) {
-    excl = ((4 & sr_pin_state[ering_head]) > 0);
-    if(duration[ering_head] <= 0) {
-      sr_pin_num[ering_head] = 0;
-      duration[ering_head] = 0;
-      sr_pin_state[ering_head] = 0;
-      excl = 0;
-    }
-    if(excl == 0) {
-      ering_head++;
-      if(ering_head == MAX_ERING)
-        ering_head = 0;
-    }
+  unsigned char excl_used = 0;
+  while (ering_head != ering_tail && duration[ering_head] <= 0) {
+    sr_pin_num[ering_head] = 0;
+    duration[ering_head] = 0;
+    sr_pin_state[ering_head] = 0;      
+    ering_head++;
+    if(ering_head == MAX_ERING)
+      ering_head = 0;
   }
 }
 
+/*
+ * Event (pin) types:
+ *   a. set pin + polarity for specified time; clear both after that; just one of the type energized at a time
+ *   b. set or clear pin, ignore polarity; ignore time; allow other pins at the same time
+ * duration:
+ *     >0 - deenergize after time elapses
+ *     <0 - deenergize on deenergize event
+ */
 int add_to_event_ring(char new_sr_pin_num, int new_duration, char exclusive, char polarity, char energize) {
   if(ering_tail < MAX_ERING - 1 && ering_tail != ering_head -1 ||
      ering_tail == MAX_ERING - 1 && ering_head != 0) {
@@ -1766,6 +1786,18 @@ int add_to_event_ring(char new_sr_pin_num, int new_duration, char exclusive, cha
       ering_tail = 0;
   }
 }
+
+int switch_sr_pin(char pin_num, char onoff) {
+  if(is_plot_flag(&SR_PIN_TYPES, pin_num)) {
+    // bistable relay; use ring to time the output value
+    add_to_event_ring(pin_num, ENERGIZE_DURATION, 1, onoff, 1);
+  } else {
+    // regular bool; just set or clear
+    set_sr_output_pin(pin_num, POLARITY_IGNORE, onoff);
+  }
+}
+
+
 
 
 
@@ -1813,8 +1845,8 @@ void setup() {
       pinMode(POLARITY_ON_PIN, OUTPUT);
       pinMode(POLARITY_OFF_PIN, OUTPUT);
       // turn off both pins ASAP
-      digitalWrite(POLARITY_ON_PIN, HIGH);
-      digitalWrite(POLARITY_OFF_PIN, HIGH);
+      digitalWrite(POLARITY_ON_PIN, LOW);
+      digitalWrite(POLARITY_OFF_PIN, LOW);
 
       // set up the output shift register pins
       pinMode(SHIFT_CLOCK_PIN, OUTPUT);
