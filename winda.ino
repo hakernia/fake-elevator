@@ -707,9 +707,9 @@ void clear_plot_flag(unsigned long *flags, char flag_num) {
   unsigned long mask = 1;
   *flags &= ((mask << flag_num) ^ 0xFFFF);
 }
-char is_plot_flag(unsigned long *flags, char flag_num) {
+char is_plot_flag(unsigned long flags, char flag_num) {
   unsigned long mask = 1;
-  return ((*flags & (mask << flag_num)) > 0);  // return exactly 1 or 0
+  return ((flags & (mask << flag_num)) > 0);  // return exactly 1 or 0
 }
 char num_set_flags(unsigned long *flags) {
   unsigned long mask = 1;
@@ -1192,7 +1192,7 @@ void communicate_rejections() {
     add_spk(MSG_NIE_WPUSZCZENI);
   }
 
-  if(is_plot_flag(&rejected_person_flags, PERSON_SMUTNI)) {
+  if(is_plot_flag(rejected_person_flags, PERSON_SMUTNI)) {
     add_spk(MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA);
   }
   if(rozsadek_rzadu == 1) {
@@ -1231,7 +1231,7 @@ void communicate_forced_exits() {
 
 char want_to_enter(char person) {
   // assumption: person is on the curr_floor
-  if(people_on_board >= max_people_on_board && is_plot_flag(&plot_flags, LIMITS_APPLY_FLAG) &&
+  if(people_on_board >= max_people_on_board && is_plot_flag(plot_flags, LIMITS_APPLY_FLAG) &&
      person != PERSON_SREBRNY) {
     set_plot_flag(&unhappy_person_flags, person);
     set_plot_flag(&rejected_person_flags, person);
@@ -1361,7 +1361,7 @@ void communicate_possessions_entered_to_cabin() {
 
 // comunicate target of smutni if they have just entered the lift
 void communicate_target_of_entering_smutni() {
-  if(is_plot_flag(&entering_flags, PERSON_SMUTNI)) {
+  if(is_plot_flag(entering_flags, PERSON_SMUTNI)) {
     if(smutni_target > -1)
       add_spk(MSG_SMUTNI_CHCA_ZNALEZC);
       add_spk(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
@@ -1405,7 +1405,7 @@ void communicate_mystery_floor_gossip() {
   char nuts_count = 0;
   do {
     for(char person = 0; person < NUM_PERSONS; person++) {
-      if(is_plot_flag(&nuts_person_flags, person))
+      if(is_plot_flag(nuts_person_flags, person))
       if(is_at_place(person) == (PLACE_CABIN+1)) {
         nuts_count++;
         if(random(10) < nuts_count) {
@@ -1424,7 +1424,7 @@ void communicate_mystery_floor_gossip() {
 
 void communicate_premigration_stuff() {
   //if(anuszka_broke_oil == 1) {
-  if(is_plot_flag(&plot_flags, ANUSZKA_BROKE_OIL) && !is_plot_flag(&plot_flags, ANUSZKA_BROKE_OIL_SILENT)) {
+  if(is_plot_flag(plot_flags, ANUSZKA_BROKE_OIL) && !is_plot_flag(plot_flags, ANUSZKA_BROKE_OIL_SILENT)) {
     set_plot_flag(&plot_flags, ANUSZKA_BROKE_OIL_SILENT);  // do not communicate next time
     add_spk(MSG_ANUSZKA_ROZLALA_OLEJ);
   }
@@ -1471,7 +1471,7 @@ void migrate_objs() {
       if((place = is_at_place(person)) == (curr_floor+1)) {
         place--;
         // person not in cabin
-        if(!is_plot_flag(&exiting_flags, person) && want_to_enter(person))
+        if(!is_plot_flag(exiting_flags, person) && want_to_enter(person))
           enter_lift(person);
       }
     }
@@ -1537,7 +1537,7 @@ char just_exited(char person) {
 char get_next_target() {
   for(char person=0; person < NUM_PERSONS; person++) {
     if(person_loc(person) > -1 && 
-       is_plot_flag(&forced_exiting_flags, person)) {
+       is_plot_flag(forced_exiting_flags, person)) {
       return person;
     }
   }
@@ -1611,7 +1611,7 @@ void proceed_after_migration() {
   }
 
   // smutni sie skarza centrali
-  if(is_plot_flag(&rejected_person_flags, PERSON_SMUTNI)) {
+  if(is_plot_flag(rejected_person_flags, PERSON_SMUTNI)) {
     if(rozsadek_rzadu > 0)
       rozsadek_rzadu--;
     if(rozsadek_rzadu == 1)
@@ -1706,7 +1706,7 @@ unsigned char ering_tail = ering_head;
 // output buffer for shift register
 unsigned long sr_data = 0x00000000;  // 4 bytes
 // sr pin types; determined by attached hardware; handle mindfully!
-unsigned long SR_PIN_TYPES = 0x00FFFFFF;  // 0 - regular bool, 1 - bistable relay
+#define SR_PIN_TYPES  0x00FFFFFF    // 0 - regular bool, 1 - bistable relay
 
 #define POLARITY_CLEAR   -1
 #define POLARITY_IGNORE  -2
@@ -1808,7 +1808,7 @@ int add_to_event_ring(char new_sr_pin_num, int new_duration, char polarity) {
 }
 
 int switch_sr_pin(char pin_num, char onoff) {
-  if(is_plot_flag(&SR_PIN_TYPES, pin_num)) {
+  if(is_plot_flag(SR_PIN_TYPES, pin_num)) {
     // bistable relay; use ring to time the output value
     add_to_event_ring(pin_num, ENERGIZE_DURATION, onoff);
   } else {
@@ -1981,7 +1981,7 @@ void loop() {
            if(state_countdown == 0) {
              state = LIFT_STOPPED;
              wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + 
-                     is_plot_flag(&plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
+                     is_plot_flag(plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
            }
            break;
     case LIFT_STOPPED:
@@ -2202,7 +2202,7 @@ void loop() {
              state = LIFT_STOPPED;
              //wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + alt_floor_announcements);  // Announcing "floor X"
              wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + 
-                is_plot_flag(&plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
+                is_plot_flag(plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
 
            }
            break;
