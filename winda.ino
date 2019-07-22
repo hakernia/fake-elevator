@@ -1742,7 +1742,6 @@ void set_sr_output_pin(int sr_pin_num, char polarity, char energize) {
   else {
     // clear output pin
     sr_data = sr_data & (0xffffffff ^ (mask << sr_pin_num)); // move single 1 num bits and invert all
-    sr_data = 0;
   }
   send_to_sr(sr_data);
 }
