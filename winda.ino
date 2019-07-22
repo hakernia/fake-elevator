@@ -321,11 +321,41 @@ unsigned long modeset[NUM_MODESETS][5] =
 #define MODESET_SWITCHES_3    3
 #define MODESET_FLOOR_STOP    4
 
-// mapping table: key num to shift register pin
-unsigned char map_key_to_sr[1][NUM_KEYS] = {{0, 
-                                            8, 7, 6, 4, 14, 12, 3, 15, 13, 11, 10, 9, 2, 5, 1,  // 15 lights
-                                            16, 17, 18, 19, 20, // cold light, fan, ..., ..., ...
-                                            21, 22}};   // stop, ring
+/*
+ * Connector -> Shift Register (SR) pin -> IC pin mapping:
+ * Conn 1           Conn 5
+ * 1. 7  IC1.A      1. 23 IC3.A
+ * 2. 6  IC1.B      2. 16 IC3.H
+ * 3. 5  IC1.C      3. 17 IC3.G
+ *                  4. 18 IC3.F
+ * Conn 2
+ * 1. 4  IC1.D      Conn 6
+ * 2. 3  IC1.E      1. 19 IC3.E
+ * 3. 2  IC1.F      2. 20 IC3.D
+ * 4. 1  IC1.G      3. 21 IC3.C
+ * 5. 0  IC1.H      4. 22 IC3.B
+ *                  5. 15 IC2.A
+ * Conn 3
+ * 1. 14 IC2.B                 IC 4
+ * 2. 13 IC2.C                30 B
+ * 3. 12 IC2.D                29 C    31 A
+ * 4. 11 IC2.E                28 D
+ *                            27 E
+ * Conn 4                     26 F
+ * 1. 10 IC2.F                25 G
+ * 2. 9  IC2.G                24 H
+ * 3. 8  IC2.H
+ * 
+ */
+/* mapping table: key num to shift register pin */
+unsigned char map_key_to_sr[1][KEY_DIGIT_MAX - KEY_DIGIT_MIN + 1] = 
+       {{10, 9, 8, 3, 13, 11, 2, 14, 12, 7, 6, 5, 1, 4, 0,   // key digit 1-15: lights
+         15, 22, 21, 20, 19}};                               // key digit 16-20: cold light, fan, ..., ..., ... 
+/* 
+ * Unmapped SR pins (can be driven by the story):
+ * type 1 (bistable relay): 18, 17, 16, 23
+ * type 0 (regular boolean): 24, 25, 26, 27, 28, 29, 30, 31
+ */
 
 // set key to next color in given modeset
 void next_mode(char key_num, char modeset_num) {
@@ -1656,9 +1686,12 @@ void activate_objs() {
 void send_to_sr(unsigned long data) {
   digitalWrite(SHIFT_LATCH_PIN, LOW);
   shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, data);
-  shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, (data >> 8));
-  shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, (data >> 8));
-  shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, (data >> 8));
+  data >>= 8;
+  shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, data);
+  data >>= 8;
+  shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, data);
+  data >>= 8;
+  shiftOut(SHIFT_DATA_PIN, SHIFT_CLOCK_PIN, LSBFIRST, data);
   digitalWrite(SHIFT_LATCH_PIN, HIGH);
 }
 
