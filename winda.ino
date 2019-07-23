@@ -181,16 +181,15 @@ char count_set_flags(unsigned long flags) {
 // n starting from 0
 // returns 0 if first bit is set or if none is; works exactly as array
 // so make sure to call only if you know any bits are set
-char next_set_flag(unsigned long *flags, char n) {
-  unsigned long mask = 1;
+char next_set_flag(unsigned long flags, char n) {
   char flag_count = 0;
   for(char ff = 0; ff < 32; ff++) {
-    if(*flags & mask) {
+    if(flags & 1) {
       if(flag_count == n)
         return ff;
       flag_count++;
     }
-    mask <<= 1;
+    flags >>= 1;
   }
   return 0;
 }
@@ -932,17 +931,17 @@ void communicate_exits() {
   if(ex_count == 1) {
     add_spk(MSG_Z_WINDY_WYSIADA);
     //add_spk(MSG_OFFS_PERSONS + exiting[0] * 4 + MIANOWNIK_DOWN);
-    add_spk(MSG_OFFS_PERSONS + next_set_flag(&exiting_flags, 0) * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(exiting_flags, 0) * 4 + MIANOWNIK_DOWN);
   }
   else {
     add_spk(MSG_Z_WINDY_WYSIADAJA);
     for(ff=0; ff<ex_count-1; ff++) {
       //add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_UP);
-      add_spk(MSG_OFFS_PERSONS + next_set_flag(&exiting_flags, ff) * 4 + MIANOWNIK_UP);
+      add_spk(MSG_OFFS_PERSONS + next_set_flag(exiting_flags, ff) * 4 + MIANOWNIK_UP);
     }
     add_spk(MSG_I + random(2));
     //add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_DOWN);
-    add_spk(MSG_OFFS_PERSONS + next_set_flag(&exiting_flags, ff) * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(exiting_flags, ff) * 4 + MIANOWNIK_DOWN);
   }
 }
 //char entering[NUM_PERSONS];
@@ -964,17 +963,17 @@ void communicate_entries() {
   if(ent_count == 1) {
     add_spk(MSG_WSIADA);
     //add_spk(MSG_OFFS_PERSONS + entering[0] * 4 + MIANOWNIK_DOWN);
-    add_spk(MSG_OFFS_PERSONS + next_set_flag(&entering_flags, 0) * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(entering_flags, 0) * 4 + MIANOWNIK_DOWN);
   }
   else {
     add_spk(MSG_WSIADAJA);
     for(ff=0; ff<ent_count-1; ff++) {
       //add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_UP);
-      add_spk(MSG_OFFS_PERSONS + next_set_flag(&entering_flags, ff) * 4 + MIANOWNIK_UP);
+      add_spk(MSG_OFFS_PERSONS + next_set_flag(entering_flags, ff) * 4 + MIANOWNIK_UP);
     }
     add_spk(MSG_I + random(2));
     //add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_DOWN);
-    add_spk(MSG_OFFS_PERSONS + next_set_flag(&entering_flags, ff) * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(entering_flags, ff) * 4 + MIANOWNIK_DOWN);
   }
 }
 
@@ -1357,7 +1356,7 @@ void communicate_possessions_entered_to_cabin() {
   for(char ff = 0; ff < ent_count; ff++) {
     // person in cabin
     //communicate_person_owns(entering[ff]);
-    communicate_person_owns(next_set_flag(&entering_flags, ff));
+    communicate_person_owns(next_set_flag(entering_flags, ff));
   }
 }
 
@@ -1524,7 +1523,7 @@ void migrate_objs() {
 char just_entered(char person) {
   for(char ff=0; ff<ent_count; ff++)
     //if(entering[ff] == person)
-    if(next_set_flag(&entering_flags, ff) == person)
+    if(next_set_flag(entering_flags, ff) == person)
       return true;
   return false;
 }
@@ -1532,7 +1531,7 @@ char just_entered(char person) {
 char just_exited(char person) {
   for(char ff=0; ff<ex_count; ff++)
     //if(exiting[ff] == person)
-    if(next_set_flag(&exiting_flags, ff) == person)
+    if(next_set_flag(exiting_flags, ff) == person)
       return true;
   return false;
 }
