@@ -1700,6 +1700,12 @@ unsigned char ering_tail = ering_head;
 
 // output buffer for shift register
 unsigned long sr_data = 0x00000000;  // 4 bytes
+
+/*
+ * Event (pin) types:
+ *   a. set pin + polarity for specified time; clear both after that; just one of the type energized at a time
+ *   b. set or clear pin, ignore polarity; ignore time; allow other pins at the same time
+ */
 // sr pin types; determined by attached hardware; handle mindfully!
 #define SR_PIN_TYPES  0x00FFFFFF    // 0 - regular bool, 1 - bistable relay
 
@@ -1741,9 +1747,6 @@ void set_sr_output_pin(int sr_pin_num, char polarity, char energize) {
   send_to_sr(sr_data);
 }
 
-// >0 - energize or deenergize it and countdown
-// 0 - deenergize it and remove
-// <0 - energize or deenergize and remove
 void process_event_ring_tick() {
   if(ering_head == ering_tail)
     return;
@@ -1755,6 +1758,7 @@ void process_event_ring_tick() {
     }
     duration[ering_head]--; // countdown
   } else {
+    // duration ended, remove entry
     set_sr_output_pin(sr_pin_num[ering_head], POLARITY_CLEAR, 0);  // clear polarity, deenergize
     ering_head++;
     if(ering_head == MAX_ERING)
@@ -1762,32 +1766,6 @@ void process_event_ring_tick() {
   }    
 }
 
-/*
- * If used up, clear the ring entry and move head towards tail
- */
- /*
-void clean_event_ring() {
-  unsigned char excl = 0;
-  unsigned char excl_used = 0;
-  while (ering_head != ering_tail && duration[ering_head] <= 0) {
-    sr_pin_num[ering_head] = 0;
-    duration[ering_head] = 0;
-    sr_pin_state[ering_head] = 0;      
-    ering_head++;
-    if(ering_head == MAX_ERING)
-      ering_head = 0;
-  }
-}
-*/
-
-/*
- * Event (pin) types:
- *   a. set pin + polarity for specified time; clear both after that; just one of the type energized at a time
- *   b. set or clear pin, ignore polarity; ignore time; allow other pins at the same time
- * duration:
- *     >0 - deenergize after time elapses
- *     <0 - deenergize on deenergize event
- */
 int add_to_event_ring(char new_sr_pin_num, int new_duration, char polarity) {
   if(ering_tail < MAX_ERING - 1 && ering_tail != ering_head -1 ||
      ering_tail == MAX_ERING - 1 && ering_head != 0) {
