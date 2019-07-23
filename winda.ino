@@ -151,7 +151,6 @@ char last_active_modeset_num = 0;
 
 
 
-//int add_to_event_ring(char new_sr_pin_num, int new_duration, char polarity);
 int switch_sr_pin(char pin_num, char onoff);
 
 
@@ -430,12 +429,10 @@ void handle_queue(char key_num, char modeset_num) {  // used by individual digit
       if(mode[modeset_num][KEY_STOP])                             // key stop is active
       if(key_num >= KEY_DIGIT_MIN && key_num <= KEY_DIGIT_MAX) {  // number keys only
         if(mode[modeset_num][key_num]) {
-          //add_to_event_ring(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 1); // sr_pin_num, duration, polarity
           switch_sr_pin(map_key_to_sr[0][key_num-1], 1); // sr_pin_num, polarity
           last_active_modeset_num = modeset_num;
         }
         else
-          //add_to_event_ring(map_key_to_sr[0][key_num-1], ENERGIZE_DURATION, 0);
           switch_sr_pin(map_key_to_sr[0][key_num-1], 0); // sr_pin_num, polarity
       }
   }
@@ -443,7 +440,6 @@ void handle_queue(char key_num, char modeset_num) {  // used by individual digit
 void all_digits_off() {
   for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
     if(mode[last_active_modeset_num][ff])
-      //add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, 0);
       switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], 0);
   }
   mode[last_active_modeset_num][KEY_STOP] = 0;  // turn off STOP key in last modeset
@@ -456,7 +452,6 @@ void handle_queue_bulk(char key_num, char modeset_num) {  // used by stop key
       // Update queue with all digits ON if key STOP is pressed
       for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
         if(mode[modeset_num][ff])                 // the key ff is ON
-          //add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, mode[modeset_num][KEY_STOP]);
           switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], mode[modeset_num][KEY_STOP]);
         if(mode[modeset_num][KEY_STOP])
           last_active_modeset_num = modeset_num;
@@ -471,7 +466,6 @@ void handle_long_press(char key_num, char modeset_num) {  // used by stop key
       if(mode[modeset_num][KEY_STOP] != mode[modeset_num][ff]) {
           // update to mode of the stop key
           next_mode(ff, modeset_num);
-          //add_to_event_ring(map_key_to_sr[0][ff-KEY_DIGIT_MIN], ENERGIZE_DURATION, mode[modeset_num][KEY_STOP]);
           switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], mode[modeset_num][KEY_STOP]);
           if(mode[modeset_num][KEY_STOP])
             last_active_modeset_num = modeset_num;
@@ -1932,8 +1926,6 @@ void setup() {
 
       // Initially send OFF events to all shift outputs
       for(ff=0; ff<SHIFT_NUM_BITS; ff++) {
-        // energize polarity 0 (turn off) for all outputs
-        //add_to_event_ring(ff, ENERGIZE_DURATION, 0); // sr_pin_num, duration, polarity
         switch_sr_pin(ff, 0);
       }
 }
