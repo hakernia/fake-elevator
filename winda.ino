@@ -1732,10 +1732,10 @@ void set_sr_output_pin(int sr_pin_num, char polarity, char energize) {
     } else if(polarity == 0) {
       digitalWrite(POLARITY_OFF_PIN, LOW);
       digitalWrite(POLARITY_ON_PIN, HIGH);  // set the ON polarity
-    } else if(polarity == -1) {
+    } else if(polarity == POLARITY_CLEAR) {
       digitalWrite(POLARITY_ON_PIN, LOW);   // clear both polarity pins
       digitalWrite(POLARITY_OFF_PIN, LOW);
-    }
+    } // else POLARITY_IGNORE
 
   // set shift register data
   if(energize > 0) {
@@ -1756,7 +1756,7 @@ void process_event_ring_tick() {
     // ering not empty and current entry just begins processing
     set_sr_output_pin(PIN_NUM_BITS & ering_pin_data[ering_head], // get pin number
                       POLARITY_BIT & ering_pin_data[ering_head], // get requested polarity
-                      1);                                     // energize
+                      1);                                        // energize
     ering_pin_data[ering_head] &= DURATION_INIT_BIT_NEG; // clear duration init bit
     duration = ENERGIZE_DURATION; // start counting duration
   }
@@ -1765,20 +1765,23 @@ void process_event_ring_tick() {
   } else {
     // duration ended, remove entry
     set_sr_output_pin(PIN_NUM_BITS & ering_pin_data[ering_head], // get pin number
-                      POLARITY_CLEAR,                         // clear polarity
-                      0);                                     // deenergize
+                      POLARITY_CLEAR,                            // clear polarity
+                      0);                                        // deenergize
+    // regain ering capacity
     ering_head++;
     if(ering_head == MAX_ERING)
       ering_head = 0;
   }    
 }
 
+
 int add_to_event_ring(char sr_pin_num, char polarity) {
+  // if ering current capacity allows
   if(ering_tail < MAX_ERING - 1 && ering_tail != ering_head -1 ||
      ering_tail == MAX_ERING - 1 && ering_head != 0) {
     // encode init flag, polarity and pin number on bits
     ering_pin_data[ering_tail] = DURATION_INIT_BIT | ((polarity > 0) * POLARITY_BIT) | sr_pin_num;
-
+    // decrease current ering capacity
     ering_tail++;
     if(ering_tail == MAX_ERING)
       ering_tail = 0;
