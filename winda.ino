@@ -472,7 +472,7 @@ void display_based_on_floor(char from_key, char to_key) {
     }
     else {
       if(floors[key_num] > 0)
-        leds[keymap[key_num]] = CRGB::White;
+        leds[keymap[key_num]] = 0x888888;  // CRGB::AntiqueWhite;  //CRGB::White;
       else
         leds[keymap[key_num]] = CRGB::Black;
     }
