@@ -1692,7 +1692,7 @@ void send_to_sr(unsigned long data) {
 
 // event ring buffers
 #define MAX_ERING 64
-int duration[MAX_ERING];
+char duration;
 unsigned char sr_pin_state[MAX_ERING] = {0};  // bit 4 - init, bit 1 - polarity
 unsigned char sr_pin_num[MAX_ERING];
 unsigned char ering_head = 0;
@@ -1708,7 +1708,7 @@ unsigned long sr_data = 0x00000000;  // 4 bytes
  */
 // sr pin types; determined by attached hardware; handle mindfully!
 #define SR_PIN_TYPES  0x00FFFFFF    // 0 - regular bool, 1 - bistable relay
-
+#define DURATION_INIT_BIT 8
 #define POLARITY_CLEAR   -1
 #define POLARITY_IGNORE  -2
 /* 
@@ -1750,13 +1750,14 @@ void set_sr_output_pin(int sr_pin_num, char polarity, char energize) {
 void process_event_ring_tick() {
   if(ering_head == ering_tail)
     return;
-  if(duration[ering_head]) {
-    // avoid repeating sending sr data
-    if(8 & sr_pin_state[ering_head]) {
-      set_sr_output_pin(sr_pin_num[ering_head], 2 & sr_pin_state[ering_head], 1); // set requested polarity, energize
-      sr_pin_state[ering_head] &= 0xF7; // 11110111 - clear init bit
-    }
-    duration[ering_head]--; // countdown
+  if(DURATION_INIT_BIT & sr_pin_state[ering_head]) {
+    // ering not empty and current entry just begins processing
+    set_sr_output_pin(sr_pin_num[ering_head], 2 & sr_pin_state[ering_head], 1); // set requested polarity, energize
+    sr_pin_state[ering_head] &= 0xF7; // 11110111 - clear init bit
+    duration = ENERGIZE_DURATION; // start counting duration
+  }
+  if(duration) {
+    duration--;
   } else {
     // duration ended, remove entry
     set_sr_output_pin(sr_pin_num[ering_head], POLARITY_CLEAR, 0);  // clear polarity, deenergize
@@ -1766,13 +1767,11 @@ void process_event_ring_tick() {
   }    
 }
 
-int add_to_event_ring(char new_sr_pin_num, int new_duration, char polarity) {
+int add_to_event_ring(char new_sr_pin_num, char polarity) {
   if(ering_tail < MAX_ERING - 1 && ering_tail != ering_head -1 ||
      ering_tail == MAX_ERING - 1 && ering_head != 0) {
     sr_pin_num[ering_tail] = new_sr_pin_num;
-    duration[ering_tail] = new_duration;
-    // bit 3 (val 8) indicates initialization
-    sr_pin_state[ering_tail] = (unsigned char) (8 + ((polarity > 0) << 1));
+    sr_pin_state[ering_tail] = (unsigned char) (DURATION_INIT_BIT | ((polarity > 0) << 1));
 
     ering_tail++;
     if(ering_tail == MAX_ERING)
@@ -1783,7 +1782,7 @@ int add_to_event_ring(char new_sr_pin_num, int new_duration, char polarity) {
 int switch_sr_pin(char pin_num, char onoff) {
   if(is_bit_flag(SR_PIN_TYPES, pin_num)) {
     // bistable relay; use ring to time the output value
-    add_to_event_ring(pin_num, ENERGIZE_DURATION, onoff);
+    add_to_event_ring(pin_num, onoff);
   } else {
     // regular bool; just set or clear
     set_sr_output_pin(pin_num, POLARITY_IGNORE, onoff);
@@ -1813,7 +1812,7 @@ void display_debug_2() {
     
     unsigned char dd = 0;
     for (unsigned char ff=0; ff < MAX_ERING; ff++) {
-      if(duration[ff] > 0)
+      if(duration > 0)
         dd++;
     }
     if(dd < NUM_KEYS)
