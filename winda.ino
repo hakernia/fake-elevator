@@ -155,6 +155,50 @@ char last_active_modeset_num = 0;
 int switch_sr_pin(char pin_num, char onoff);
 
 
+/* BIT FLAG FUNCTIONS */
+
+void set_bit_flag(unsigned long *flags, char flag_num) {
+  unsigned long mask = 1;
+  *flags |= mask << flag_num;
+}
+void clear_bit_flag(unsigned long *flags, char flag_num) {
+  unsigned long mask = 1;
+  *flags &= ((mask << flag_num) ^ 0xFFFF);
+}
+char is_bit_flag(unsigned long flags, char flag_num) {
+  unsigned long mask = 1;
+  return ((flags & (mask << flag_num)) > 0);  // return exactly 1 or 0
+}
+char count_set_flags(unsigned long flags) {
+  char flag_count = 0;
+  for(char ff = 0; ff < 32; ff++) {
+      flag_count += (flags & 1);
+      flags >>= 1;
+  }
+  return flag_count;
+}
+// returns number of n-th flag being set (least significant bit first)
+// n starting from 0
+// returns 0 if first bit is set or if none is; works exactly as array
+// so make sure to call only if you know any bits are set
+char next_set_flag(unsigned long *flags, char n) {
+  unsigned long mask = 1;
+  char flag_count = 0;
+  for(char ff = 0; ff < 32; ff++) {
+    if(*flags & mask) {
+      if(flag_count == n)
+        return ff;
+      flag_count++;
+    }
+    mask <<= 1;
+  }
+  return 0;
+}
+
+/* END OF BIT FLAG FUNCTIONS */
+
+
+
 void readKbd() {
   // Rows are strobed by pinMode and not digitalWrite
   // so all rows except the selected one are high impedance.
@@ -699,48 +743,6 @@ unsigned long unhappy_person_flags = 0;
 unsigned long rejected_person_flags = 0;
 unsigned long targeted_person_flags = 0;
 
-void set_plot_flag(unsigned long *flags, char flag_num) {
-  unsigned long mask = 1;
-  *flags |= mask << flag_num;
-}
-void clear_plot_flag(unsigned long *flags, char flag_num) {
-  unsigned long mask = 1;
-  *flags &= ((mask << flag_num) ^ 0xFFFF);
-}
-char is_plot_flag(unsigned long flags, char flag_num) {
-  unsigned long mask = 1;
-  return ((flags & (mask << flag_num)) > 0);  // return exactly 1 or 0
-}
-char num_set_flags(unsigned long *flags) {
-  unsigned long mask = 1;
-  char flag_count = 0;
-  for(char ff = 0; ff < 32; ff++) {
-    if(*flags & mask) {
-      flag_count++;
-    }
-    mask <<= 1;
-  }
-  return flag_count;
-}
-// returns number of n-th flag being set (least significant bit first)
-// n starting from 0
-// returns 0 if first bit is set or if none is; works exactly as array
-// so make sure to call only if you know any bits are set
-char next_set_flag(unsigned long *flags, char n) {
-  unsigned long mask = 1;
-  char flag_count = 0;
-  for(char ff = 0; ff < 32; ff++) {
-    if(*flags & mask) {
-      if(flag_count == n)
-        return ff;
-      flag_count++;
-    }
-    mask <<= 1;
-  }
-  return 0;
-}
-
-
 
 
 // who/what is where
@@ -816,7 +818,7 @@ unsigned long exiting_flags = 0;
 void exit_lift(char person) {
   lift_obj[person] = curr_floor;
   //exiting[ex_count] = person;
-  set_plot_flag(&exiting_flags, person);
+  set_bit_flag(&exiting_flags, person);
   ex_count++;
   people_on_board--;
 }
@@ -825,7 +827,7 @@ unsigned long forced_exiting_flags = 0;
 void force_exit_lift(char person) {
   lift_obj[person] = curr_floor;
   //exiting[ex_count] = person;
-  set_plot_flag(&forced_exiting_flags, person);
+  set_bit_flag(&forced_exiting_flags, person);
   forced_ex_count++;
   people_on_board--;
 }
@@ -951,7 +953,7 @@ void enter_lift(char person) {
   lift_obj[person] = PLACE_CABIN;
   // register action for further communication
   //entering[ent_count] = person;
-  set_plot_flag(&entering_flags, person);
+  set_bit_flag(&entering_flags, person);
   ent_count++;
   people_on_board++;
 }
@@ -1192,7 +1194,7 @@ void communicate_rejections() {
     add_spk(MSG_NIE_WPUSZCZENI);
   }
 
-  if(is_plot_flag(rejected_person_flags, PERSON_SMUTNI)) {
+  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
     add_spk(MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA);
   }
   if(rozsadek_rzadu == 1) {
@@ -1231,13 +1233,13 @@ void communicate_forced_exits() {
 
 char want_to_enter(char person) {
   // assumption: person is on the curr_floor
-  if(people_on_board >= max_people_on_board && is_plot_flag(plot_flags, LIMITS_APPLY_FLAG) &&
+  if(people_on_board >= max_people_on_board && is_bit_flag(plot_flags, LIMITS_APPLY_FLAG) &&
      person != PERSON_SREBRNY) {
-    set_plot_flag(&unhappy_person_flags, person);
-    set_plot_flag(&rejected_person_flags, person);
+    set_bit_flag(&unhappy_person_flags, person);
+    set_bit_flag(&rejected_person_flags, person);
     return false;
   }
-  clear_plot_flag(&unhappy_person_flags, person);
+  clear_bit_flag(&unhappy_person_flags, person);
   
   // assumption: person is on curr_floor
   switch(person) {
@@ -1361,7 +1363,7 @@ void communicate_possessions_entered_to_cabin() {
 
 // comunicate target of smutni if they have just entered the lift
 void communicate_target_of_entering_smutni() {
-  if(is_plot_flag(entering_flags, PERSON_SMUTNI)) {
+  if(is_bit_flag(entering_flags, PERSON_SMUTNI)) {
     if(smutni_target > -1)
       add_spk(MSG_SMUTNI_CHCA_ZNALEZC);
       add_spk(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
@@ -1405,7 +1407,7 @@ void communicate_mystery_floor_gossip() {
   char nuts_count = 0;
   do {
     for(char person = 0; person < NUM_PERSONS; person++) {
-      if(is_plot_flag(nuts_person_flags, person))
+      if(is_bit_flag(nuts_person_flags, person))
       if(is_at_place(person) == (PLACE_CABIN+1)) {
         nuts_count++;
         if(random(10) < nuts_count) {
@@ -1424,8 +1426,8 @@ void communicate_mystery_floor_gossip() {
 
 void communicate_premigration_stuff() {
   //if(anuszka_broke_oil == 1) {
-  if(is_plot_flag(plot_flags, ANUSZKA_BROKE_OIL) && !is_plot_flag(plot_flags, ANUSZKA_BROKE_OIL_SILENT)) {
-    set_plot_flag(&plot_flags, ANUSZKA_BROKE_OIL_SILENT);  // do not communicate next time
+  if(is_bit_flag(plot_flags, ANUSZKA_BROKE_OIL) && !is_bit_flag(plot_flags, ANUSZKA_BROKE_OIL_SILENT)) {
+    set_bit_flag(&plot_flags, ANUSZKA_BROKE_OIL_SILENT);  // do not communicate next time
     add_spk(MSG_ANUSZKA_ROZLALA_OLEJ);
   }
 }
@@ -1471,7 +1473,7 @@ void migrate_objs() {
       if((place = is_at_place(person)) == (curr_floor+1)) {
         place--;
         // person not in cabin
-        if(!is_plot_flag(exiting_flags, person) && want_to_enter(person))
+        if(!is_bit_flag(exiting_flags, person) && want_to_enter(person))
           enter_lift(person);
       }
     }
@@ -1537,7 +1539,7 @@ char just_exited(char person) {
 char get_next_target() {
   for(char person=0; person < NUM_PERSONS; person++) {
     if(person_loc(person) > -1 && 
-       is_plot_flag(forced_exiting_flags, person)) {
+       is_bit_flag(forced_exiting_flags, person)) {
       return person;
     }
   }
@@ -1553,7 +1555,7 @@ void proceed_after_migration() {
     floors[PLACE_MYSTERY_FLOOR] = 1;  // Woland presses invisible key to go to floor 11
 
   if(just_entered(PERSON_ANUSZKA)) {
-    set_plot_flag(&plot_flags, ALT_FLOOR_ANNOUNCEMENTS); // make anuszka announce floors from now on
+    set_bit_flag(&plot_flags, ALT_FLOOR_ANNOUNCEMENTS); // make anuszka announce floors from now on
     //alt_floor_announcements = MSG_ALT_FLOOR_ANUSZKA;
   }
 
@@ -1564,7 +1566,7 @@ void proceed_after_migration() {
      (is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANUSZKA+1) // anuszka had oil
     ) {
     //anuszka_broke_oil = 1; // communicate broken oil
-    set_plot_flag(&plot_flags, ANUSZKA_BROKE_OIL);  // communicate broken oil
+    set_bit_flag(&plot_flags, ANUSZKA_BROKE_OIL);  // communicate broken oil
   }
      
   // ania na 6 pietrze zostawia olej, a na innych pietrach go bierze
@@ -1604,18 +1606,18 @@ void proceed_after_migration() {
             break;  // ignore them
           default:
             // other persons on floor 11 get nuts
-          set_plot_flag(&nuts_person_flags, person);
+          set_bit_flag(&nuts_person_flags, person);
         }
       }
     }
   }
 
   // smutni sie skarza centrali
-  if(is_plot_flag(rejected_person_flags, PERSON_SMUTNI)) {
+  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
     if(rozsadek_rzadu > 0)
       rozsadek_rzadu--;
     if(rozsadek_rzadu == 1)
-      clear_plot_flag(&plot_flags, LIMITS_APPLY_FLAG);  // gvmt orders ignoring weight limit of the lift
+      clear_bit_flag(&plot_flags, LIMITS_APPLY_FLAG);  // gvmt orders ignoring weight limit of the lift
   }
 
   if(smutni_target >= 0 &&  // smutni maja kogos na celowniku; szukaja kogos
@@ -1808,7 +1810,7 @@ int add_to_event_ring(char new_sr_pin_num, int new_duration, char polarity) {
 }
 
 int switch_sr_pin(char pin_num, char onoff) {
-  if(is_plot_flag(SR_PIN_TYPES, pin_num)) {
+  if(is_bit_flag(SR_PIN_TYPES, pin_num)) {
     // bistable relay; use ring to time the output value
     add_to_event_ring(pin_num, ENERGIZE_DURATION, onoff);
   } else {
@@ -1927,7 +1929,7 @@ void setup() {
       max_people_on_board = (NUM_PERSONS / 2) > 2 ? 2 : NUM_PERSONS / 2;
 
       // Initialize the plot related data
-      set_plot_flag(&plot_flags, LIMITS_APPLY_FLAG); // start with people obeying lift limits
+      set_bit_flag(&plot_flags, LIMITS_APPLY_FLAG); // start with people obeying lift limits
 
       // Initially send OFF events to all shift outputs
       for(ff=0; ff<SHIFT_NUM_BITS; ff++) {
@@ -1981,7 +1983,7 @@ void loop() {
            if(state_countdown == 0) {
              state = LIFT_STOPPED;
              wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + 
-                     is_plot_flag(plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
+                     is_bit_flag(plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
            }
            break;
     case LIFT_STOPPED:
@@ -2202,7 +2204,7 @@ void loop() {
              state = LIFT_STOPPED;
              //wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + alt_floor_announcements);  // Announcing "floor X"
              wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + 
-                is_plot_flag(plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
+                is_bit_flag(plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
 
            }
            break;
