@@ -103,9 +103,14 @@ char map_key_to_led[NUM_KEYS] =
          6, 8, 5, 9, 4, 10, 3, 11, 2, 12,  // DIGITS
          1, 0};                            // KEY_STOP, KEY_BELL
 char mode[NUM_MODESETS][NUM_KEYS];
-char physical_key[NUM_PHYS_KEYS];
-char key[NUM_KEYS];      // 0 - released, 1 - pressed
-char last_key[NUM_KEYS]; // last state of key; used to detect a change
+//char physical_key[NUM_PHYS_KEYS];
+unsigned long physical_key = 0;  // bit array: 0 - released, 1 - pressed
+
+//char key[NUM_KEYS];      // 0 - released, 1 - pressed
+unsigned long key = 0;          // bit array: 0 - released, 1 - pressed
+//char last_key[NUM_KEYS]; // last state of key; used to detect a change
+unsigned long last_key = 0;     // last state of key; used to detect a change
+
 #define MAX_KEY_COUNTDOWN  3000
 #define MAX_KEY_PRESS_COUNTDOWN  900
 int key_countdown[NUM_KEYS];  // indicating time after key was pressed
@@ -163,8 +168,8 @@ void set_bit_flag(unsigned long *flags, char flag_num) {
 void clear_bit_flag(unsigned long *flags, char flag_num) {
   *flags &= ~(1UL << flag_num);
 }
-char is_bit_flag(unsigned long flags, char flag_num) {
-  return (flags >> flag_num) & 1UL;
+char is_bit_flag(unsigned long *flags, char flag_num) {
+  return (*flags >> flag_num) & 1UL;
 }
 char count_set_flags(unsigned long flags) {
   char flag_count = 0;
@@ -194,6 +199,24 @@ char next_set_flag(unsigned long flags, char n) {
 /* END OF BIT FLAG FUNCTIONS */
 
 
+int key_toggled(int key_num) {
+  return is_bit_flag(&key, key_num) != is_bit_flag(&last_key, key_num);
+}
+
+unsigned char shift_num_bank = 0;
+
+void set_phys_key(int key_num) {
+  set_bit_flag(&key, key_num);
+}
+void clear_phys_key(int key_num) {
+  clear_bit_flag(&key, key_num);
+}
+void set_phys_num_key(int key_num) {
+  set_bit_flag(&key, key_num + shift_num_bank);
+}
+void clear_phys_num_key(int key_num) {
+  clear_bit_flag(&key, key_num + shift_num_bank);
+}
 
 void readKbd() {
   // Rows are strobed by pinMode and not digitalWrite
@@ -201,21 +224,37 @@ void readKbd() {
   //digitalWrite(ROW_1, LOW);
   pinMode(ROW_1, OUTPUT);
     if(digitalRead(COL_1) == LOW)
-      physical_key[10] = 1;
+      //physical_key[10] = 1;
+      //set_bit_flag(&physical_key, 10);
+      set_phys_num_key(10);
     else
-      physical_key[10] = 0;
+      //physical_key[10] = 0;
+      //clear_bit_flag(&physical_key, 10);
+      clear_phys_num_key(10);
     if(digitalRead(COL_2) == LOW)
-      physical_key[8] = 1;
+      //physical_key[8] = 1;
+      //set_bit_flag(&physical_key, 8);
+      set_phys_num_key(8);
     else
-      physical_key[8] = 0;
+      //physical_key[8] = 0;
+      //clear_bit_flag(&physical_key, 8);
+      clear_phys_num_key(8);
     if(digitalRead(COL_3) == LOW)
-      physical_key[6] = 1;
+      //physical_key[6] = 1;
+      //set_bit_flag(&physical_key, 6);
+      set_phys_num_key(6);
     else
-      physical_key[6] = 0;
+      //physical_key[6] = 0;
+      //clear_bit_flag(&physical_key, 6);
+      clear_phys_num_key(6);
     if(digitalRead(COL_4) == LOW)
-      physical_key[4] = 1;
+      //physical_key[4] = 1;
+      //set_bit_flag(&physical_key, 4);
+      set_phys_num_key(4);
     else
-      physical_key[4] = 0;
+      //physical_key[4] = 0;
+      //clear_bit_flag(&physical_key, 4);
+      clear_phys_num_key(4);
   pinMode(ROW_1, INPUT);
   //digitalWrite(ROW_1, HIGH);
   
@@ -223,72 +262,127 @@ void readKbd() {
   //digitalWrite(ROW_2, LOW);
   pinMode(ROW_2, OUTPUT);
   if(digitalRead(COL_1) == LOW)
-      physical_key[2] = 1;
+      //physical_key[2] = 1;
+      //set_bit_flag(&physical_key, 2);
+      set_phys_num_key(2);
     else
-      physical_key[2] = 0;
+      //physical_key[2] = 0;
+      //clear_bit_flag(&physical_key, 2);
+      clear_phys_num_key(2);
     if(digitalRead(COL_2) == LOW)
-      physical_key[0] = 1;
+      //physical_key[0] = 1;
+      //set_bit_flag(&physical_key, 0);
+      set_phys_key(0);
     else
-      physical_key[0] = 0;
+      //physical_key[0] = 0;
+      //clear_bit_flag(&physical_key, 0);
+      clear_phys_key(0);
     if(digitalRead(COL_3) == LOW)
-      physical_key[1] = 1;
+      //physical_key[1] = 1;
+      //set_bit_flag(&physical_key, 1);
+      set_phys_num_key(1);
     else
-      physical_key[1] = 0;
+      //physical_key[1] = 0;
+      //clear_bit_flag(&physical_key, 1);
+      clear_phys_num_key(1);
     if(digitalRead(COL_4) == LOW)
-      physical_key[3] = 1;
+      //physical_key[3] = 1;
+      //set_bit_flag(&physical_key, 3);
+      set_phys_num_key(3);
     else
-      physical_key[3] = 0;
+      //physical_key[3] = 0;
+      //clear_bit_flag(&physical_key, 3);
+      clear_phys_num_key(3);
   pinMode(ROW_2, INPUT);
   //digitalWrite(ROW_2, HIGH);
   
   //digitalWrite(ROW_3, LOW);
   pinMode(ROW_3, OUTPUT);
     if(digitalRead(COL_1) == LOW)
-      physical_key[5] = 1;
+      //physical_key[5] = 1;
+      //set_bit_flag(&physical_key, 5);
+      //physical_key |= 0x00000020;
+      set_phys_num_key(5);
     else
-      physical_key[5] = 0;
+      //physical_key[5] = 0;
+      //clear_bit_flag(&physical_key, 5);
+      //physical_key &= 0xFFFFFFDF;
+      clear_phys_num_key(5);
     if(digitalRead(COL_2) == LOW)
-      physical_key[7] = 1;
+      //physical_key[7] = 1;
+      //set_bit_flag(&physical_key, 7);
+      //physical_key |= 0x00000080;
+      set_phys_num_key(7);
     else
-      physical_key[7] = 0;
+      //physical_key[7] = 0;
+      //clear_bit_flag(&physical_key, 7);
+      //physical_key &= 0xFFFFFF7F;
+      clear_phys_num_key(7);
     if(digitalRead(COL_3) == LOW)
-      physical_key[9] = 1;
+      //physical_key[9] = 1;
+      //set_bit_flag(&physical_key, 9);
+      //physical_key |= 0x00000200;
+      set_phys_num_key(9);
     else
-      physical_key[9] = 0;
+      //physical_key[9] = 0;
+      //clear_bit_flag(&physical_key, 9);
+      //physical_key &= 0xFFFFFDFF;
+      clear_phys_num_key(9);
 /*    if(digitalRead(COL_4) == LOW)
-      physical_key[4] = 1;
+      //physical_key[4] = 1;
+      set_bit_flag(&physical_key, 4);
     else
-      physical_key[4] = 0;  */
+      //physical_key[4] = 0;
+      clear_bit_flag(&physical_key, 4); */
   pinMode(ROW_3, INPUT);
   //digitalWrite(ROW_3, HIGH);
   
   //digitalWrite(ROW_4, LOW);
   pinMode(ROW_4, OUTPUT);  
     if(digitalRead(COL_1) == LOW)
-      physical_key[11] = 1;
+      //physical_key[11] = 1;
+      //set_bit_flag(&physical_key, 11);
+      //physical_key |= 0x00000800;
+      set_phys_key(21);   // 11->21, so no need to copy the bits phys_key -> key
     else
-      physical_key[11] = 0;
+      //physical_key[11] = 0;
+      //clear_bit_flag(&physical_key, 11);
+      //physical_key &= 0xFFFFF7FF;
+      clear_phys_key(21); // 11->21, so no need to copy the bits phys_key -> key
     if(digitalRead(COL_2) == LOW)
-      physical_key[12] = 1;
+      //physical_key[12] = 1;
+      //set_bit_flag(&physical_key, 12);
+      //physical_key |= 0x00001000;
+      set_phys_key(22);  // 12->22, so no need to copy the bits phys_key -> key
     else
-      physical_key[12] = 0;
+      //physical_key[12] = 0;
+      //clear_bit_flag(&physical_key, 12);
+      //physical_key &= 0xFFFFEFFF;
+      clear_phys_key(22); // 12->22, so no need to copy the bits phys_key -> key
 /*    if(digitalRead(COL_3) == LOW)
-      physical_key[6] = 1;
+      //physical_key[6] = 1;
+      set_bit_flag(&physical_key, 6);
     else
-      physical_key[6] = 0;
+      //physical_key[6] = 0;
+      clear_bit_flag(&physical_key, 6);
     if(digitalRead(COL_4) == LOW)
-      physical_key[4] = 1;
+      //physical_key[4] = 1;
+      set_bit_flag(&physical_key, 4);
     else
-      physical_key[4] = 0;  */
+      //physical_key[4] = 0;
+      clear_bit_flag(&physical_key, 4); */
   pinMode(ROW_4, INPUT);
   //digitalWrite(ROW_4, HIGH);
 }
-
+/*
 void mapPhysKeyToKey(char mode, char key_p_state) {
   switch(mode) {
     case 0:  // lift
-            memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]) * 11);
-            memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
+            //memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]) * 11);
+            //memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
+            //key =   physical_key & 0x000007FF;          //       0000 0000 0000 0000 0000 0111 1111 1111
+            //key |= (physical_key & 0x00001800) << 10;   // s->d: 0000 0000 0dd0 0000 000s s000 0000 0000
+            key = physical_key;
             break;
             
             // switches
@@ -297,31 +391,41 @@ void mapPhysKeyToKey(char mode, char key_p_state) {
     case 3:
     case 4: if(key_p_state == 0) {  // P key is OFF
               // copy keys normal way, digits to lower bank
-              memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]) * 11);
-              memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
+              //memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]) * 11);
+              //memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
+              //key =   physical_key & 0x000007FF;         //       0000 0000 0000 0000 0000 0111 1111 1111
+              //key |= (physical_key & 0x00001800) << 10;  // s->d: 0000 0000 0dd0 0000 000s s000 0000 0000 // already at 21,22
+              key = physical_key;
             }
             else {
               // P key is ON -> copy digit keys to upper bank
-              memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]));
-              memcpy(&key[11], &physical_key[1], sizeof(physical_key[1]) * 10);
-              memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
+              //memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]));
+              key =   physical_key & 0x00000001;         //       0000 0000 0000 0000 0000 0000 0000 0001
+              //memcpy(&key[11], &physical_key[1], sizeof(physical_key[1]) * 10);
+              key |= (physical_key & 0x000007FE) << 10;  // s->d: 0000 0000 000d dddd dddd dsss ssss sss0
+              //memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
+            //  key |= (physical_key & 0x00001800) << 10;  // s->d: 0000 0000 0dd0 0000 000s s000 0000 0000
+              //key |= (physical_key & 0x00001FFE) << 10;  // s->d: 0000 0000 000d dddd dddd dsss ssss sss0
             }
             break;
   }
 }
-
+*/
 // actualize each key's key_countdown
 void countdownKbd(char from_key, char to_key) {
   char key_num;
   for(key_num=from_key; key_num<=to_key; key_num++)
-    if(key[key_num] != last_key[key_num]) {
+    //if(key[key_num] != last_key[key_num]) {
+    //if(is_bit_flag(key, key_num) != is_bit_flag(last_key, key_num)) {
+    if(key_toggled(key_num)) {
       key_countdown[key_num] = MAX_KEY_COUNTDOWN;
       key_press_countdown[key_num] = MAX_KEY_PRESS_COUNTDOWN;
     }
     else {
       if(key_countdown[key_num] > 0)
         key_countdown[key_num]--;
-      if(key[key_num])  // key is pressed
+      //if(key[key_num])  // key is pressed
+      if(is_bit_flag(&key, key_num))
         if(key_press_countdown[key_num] > 0)
           key_press_countdown[key_num]--;
     }
@@ -410,20 +514,26 @@ void switch_mode_while_visible(char key_num, char modeset_num) {
   // used by bell key so assume key_num == KEY_BELL
   //                        and modeset_num == MODESET_FUNCKEYS
   // Switch mode only if pressed while lit.
-  if(last_key[key_num] != key[key_num] &&   // just pressed or released
+  //if(last_key[key_num] != key[key_num] &&   // just pressed or released
+  //if(is_bit_flag(last_key, key_num) != is_bit_flag(key, key_num) &&
+  if(key_toggled(key_num) &&
      key_press_countdown[key_num] > 0)      // and no long press
     if(key_countdown[key_num] > 0) {        // and did not sleep at the moment
       next_mode(key_num, modeset_num);      // KEY_BELL's mode determines modeset_num
     }
 }
 void switch_mode(char key_num, char modeset_num) {  // used by all except bell key
-  if(last_key[key_num] != key[key_num] &&    // just pressed or released
+  //if(last_key[key_num] != key[key_num] &&    // just pressed or released
+  //if(is_bit_flag(last_key, key_num) != is_bit_flag(key, key_num) &&
+  if(key_toggled(key_num) &&
      key_press_countdown[key_num] > 0) {     // and no long press
       next_mode(key_num, modeset_num);
   }
 }
 void handle_queue(char key_num, char modeset_num) {  // used by individual digit keys
-  if(last_key[key_num] != key[key_num] &&    // just pressed or released
+  //if(last_key[key_num] != key[key_num] &&    // just pressed or released
+  //if(is_bit_flag(last_key, key_num) != is_bit_flag(key, key_num) &&
+  if(key_toggled(key_num) &&
      key_press_countdown[key_num] > 0) {     // and no long press
       // Update queue of shift register pins events
       if(mode[modeset_num][KEY_STOP])                             // key stop is active
@@ -445,7 +555,9 @@ void all_digits_off() {
   mode[last_active_modeset_num][KEY_STOP] = 0;  // turn off STOP key in last modeset
 }
 void handle_queue_bulk(char key_num, char modeset_num) {  // used by stop key
-  if(last_key[key_num] != key[key_num] &&    // just pressed or released
+  //if(last_key[key_num] != key[key_num] &&    // just pressed or released
+  //if(is_bit_flag(last_key, key_num) != is_bit_flag(key, key_num) &&
+  if(key_toggled(key_num) &&
      key_press_countdown[key_num] > 0) {     // and no long press
       if(last_active_modeset_num != modeset_num)  // modeset changed
         all_digits_off();                         // initially turn off previous modeset's keys
@@ -475,13 +587,16 @@ void handle_long_press(char key_num, char modeset_num) {  // used by stop key
 }
 // Go through all keys and for pressed ones modify their state (mode)
 void manage_key_mode(char modeset_num) {
-  if(key[KEY_BELL]) {
+  //if(key[KEY_BELL]) {
+  if(is_bit_flag(&key, KEY_BELL)) {
     switch_mode_while_visible(KEY_BELL, modeset_num);
   }
-  if(key[KEY_P]) {
+  //if(key[KEY_P]) {
+  if(is_bit_flag(&key, KEY_P)) {
     switch_mode(KEY_P, modeset_num);
   }
-  if(key[KEY_STOP]) {
+  //if(key[KEY_STOP]) {
+  if(is_bit_flag(&key, KEY_STOP)) {
     //switch_mode(KEY_STOP, modeset_num);  // just pressed
     //handle_queue_bulk(KEY_STOP, modeset_num); // just pressed
     handle_long_press(KEY_STOP, modeset_num);
@@ -490,7 +605,8 @@ void manage_key_mode(char modeset_num) {
     handle_queue_bulk(KEY_STOP, modeset_num); // just released
   }
   for(key_num=KEY_DIGIT_MIN; key_num<=KEY_DIGIT_MAX; key_num++) {
-    if(key[key_num]) {
+    //if(key[key_num]) {
+    if(is_bit_flag(&key, key_num)) {
       switch_mode(key_num, modeset_num);
       handle_queue(key_num, modeset_num);
     }
@@ -1187,7 +1303,7 @@ void communicate_rejections() {
     add_spk(MSG_NIE_WPUSZCZENI);
   }
 
-  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
+  if(is_bit_flag(&rejected_person_flags, PERSON_SMUTNI)) {
     add_spk(MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA);
   }
   if(rozsadek_rzadu == 1) {
@@ -1226,7 +1342,7 @@ void communicate_forced_exits() {
 
 char want_to_enter(char person) {
   // assumption: person is on the curr_floor
-  if(people_on_board >= max_people_on_board && is_bit_flag(plot_flags, LIMITS_APPLY_FLAG) &&
+  if(people_on_board >= max_people_on_board && is_bit_flag(&plot_flags, LIMITS_APPLY_FLAG) &&
      person != PERSON_SREBRNY) {
     set_bit_flag(&unhappy_person_flags, person);
     set_bit_flag(&rejected_person_flags, person);
@@ -1356,7 +1472,7 @@ void communicate_possessions_entered_to_cabin() {
 
 // comunicate target of smutni if they have just entered the lift
 void communicate_target_of_entering_smutni() {
-  if(is_bit_flag(entering_flags, PERSON_SMUTNI)) {
+  if(is_bit_flag(&entering_flags, PERSON_SMUTNI)) {
     if(smutni_target > -1)
       add_spk(MSG_SMUTNI_CHCA_ZNALEZC);
       add_spk(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
@@ -1400,7 +1516,7 @@ void communicate_mystery_floor_gossip() {
   char nuts_count = 0;
   do {
     for(char person = 0; person < NUM_PERSONS; person++) {
-      if(is_bit_flag(nuts_person_flags, person))
+      if(is_bit_flag(&nuts_person_flags, person))
       if(is_at_place(person) == (PLACE_CABIN+1)) {
         nuts_count++;
         if(random(10) < nuts_count) {
@@ -1419,7 +1535,7 @@ void communicate_mystery_floor_gossip() {
 
 void communicate_premigration_stuff() {
   //if(anuszka_broke_oil == 1) {
-  if(is_bit_flag(plot_flags, ANUSZKA_BROKE_OIL) && !is_bit_flag(plot_flags, ANUSZKA_BROKE_OIL_SILENT)) {
+  if(is_bit_flag(&plot_flags, ANUSZKA_BROKE_OIL) && !is_bit_flag(&plot_flags, ANUSZKA_BROKE_OIL_SILENT)) {
     set_bit_flag(&plot_flags, ANUSZKA_BROKE_OIL_SILENT);  // do not communicate next time
     add_spk(MSG_ANUSZKA_ROZLALA_OLEJ);
   }
@@ -1466,7 +1582,7 @@ void migrate_objs() {
       if((place = is_at_place(person)) == (curr_floor+1)) {
         place--;
         // person not in cabin
-        if(!is_bit_flag(exiting_flags, person) && want_to_enter(person))
+        if(!is_bit_flag(&exiting_flags, person) && want_to_enter(person))
           enter_lift(person);
       }
     }
@@ -1532,7 +1648,7 @@ char just_exited(char person) {
 char get_next_target() {
   for(char person=0; person < NUM_PERSONS; person++) {
     if(person_loc(person) > -1 && 
-       is_bit_flag(forced_exiting_flags, person)) {
+       is_bit_flag(&forced_exiting_flags, person)) {
       return person;
     }
   }
@@ -1606,7 +1722,7 @@ void proceed_after_migration() {
   }
 
   // smutni sie skarza centrali
-  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
+  if(is_bit_flag(&rejected_person_flags, PERSON_SMUTNI)) {
     if(rozsadek_rzadu > 0)
       rozsadek_rzadu--;
     if(rozsadek_rzadu == 1)
@@ -1712,7 +1828,7 @@ unsigned long sr_data = 0x00000000;  // 4 bytes
  *   
  *   Note! Pin types are determined by attached hardware. Handle mindfully!
  */
-#define SR_PIN_TYPES  0x00FFFFFF    // 0 - regular bool, 1 - bistable relay
+unsigned long SR_PIN_TYPES = 0x00FFFFFF;    // 0 - regular bool, 1 - bistable relay
 
 /* 
  * Set polarity and single pin state in shift register (sr)
@@ -1793,7 +1909,7 @@ void add_to_event_ring(char sr_pin_num, char polarity) {
  * The proc takes care to identify pin type.
  */
 int switch_sr_pin(char pin_num, char onoff) {
-  if(is_bit_flag(SR_PIN_TYPES, pin_num)) {
+  if(is_bit_flag(&SR_PIN_TYPES, pin_num)) {
     // bistable relay; use ring to time the output value
     add_to_event_ring(pin_num, onoff);
   } else {
@@ -1964,7 +2080,7 @@ void loop() {
            if(state_countdown == 0) {
              state = LIFT_STOPPED;
              wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + 
-                     is_bit_flag(plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
+                     is_bit_flag(&plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
            }
            break;
     case LIFT_STOPPED:
@@ -2185,7 +2301,7 @@ void loop() {
              state = LIFT_STOPPED;
              //wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + alt_floor_announcements);  // Announcing "floor X"
              wtv020sd16p.asyncPlayVoice(MSG_OFFS_PLACES + curr_floor + 
-                is_bit_flag(plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
+                is_bit_flag(&plot_flags, ALT_FLOOR_ANNOUNCEMENTS) * MSG_ALT_FLOOR_ANUSZKA);  // Announcing "floor X"
 
            }
            break;
@@ -2209,19 +2325,33 @@ void loop() {
 
   
   countdownKbd(0, 22);  // calculate long press and fade for key range
-  memcpy(last_key, key, sizeof(last_key));
+  //memcpy(last_key, key, sizeof(last_key));
+  last_key = key;  // copy bit array
+  //memcpy(&last_key, &key, 4);
+  if (mode[0][KEY_BELL] && mode[ mode[0][KEY_BELL] ][0])
+    shift_num_bank = 10;
+  else
+    shift_num_bank = 0;
   readKbd();
+/*
   mapPhysKeyToKey(mode[0][KEY_BELL],            // key 22 - bell, its state determines mode
-                  mode[ mode[0][KEY_BELL] ][0]);  // key 0 - P, its state determines digits bank
+                  mode[ mode[0][KEY_BELL] ][0]);  // key 0 - P, its state determines digits bank in lights mode
+*/
+  //key = physical_key;
+  //memcpy(&key, &physical_key, 4);
 
-  if(key[KEY_BELL]) {
+  //if(key[KEY_BELL]) {
+  //if(is_bit_flag(key, KEY_BELL)) {
+  if((key >> KEY_BELL) & 1L) {
     // Switch mode only if pressed while lit.
     switch_mode_while_visible(KEY_BELL, MODESET_FUNCKEYS);
     // DEBUG DISPLAY for key 12
     display_debug_2();
   }
   else {
-    if(key[KEY_STOP] && (state == LIFT_RUNNING_UP || state == LIFT_RUNNING_DOWN)) {
+    //if(key[KEY_STOP] &&
+    if(is_bit_flag(&key, KEY_STOP) &&
+    (state == LIFT_RUNNING_UP || state == LIFT_RUNNING_DOWN)) {
       state = LIFT_START_FALLING;
     }
     // REGULAR DISPLAY
@@ -2230,7 +2360,8 @@ void loop() {
       // detect if key_pressed and update floors[]
       key_pressed = false;
       for(ff=0; ff<NUM_FLOORS; ff++) {
-        if(key[ff] == 1) {
+        //if(key[ff] == 1) {
+        if(is_bit_flag(&key, ff)) {
             floors[ff] = 1;
             key_pressed = true;
         }
