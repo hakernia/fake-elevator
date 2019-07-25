@@ -158,21 +158,18 @@ int switch_sr_pin(char pin_num, char onoff);
 /* BIT FLAG FUNCTIONS */
 
 void set_bit_flag(unsigned long *flags, char flag_num) {
-  unsigned long mask = 1;
-  *flags |= mask << flag_num;
+  *flags |= 1UL << flag_num;
 }
 void clear_bit_flag(unsigned long *flags, char flag_num) {
-  unsigned long mask = 1;
-  *flags &= ((mask << flag_num) ^ 0xFFFF);
+  *flags &= ~(1UL << flag_num);
 }
 char is_bit_flag(unsigned long flags, char flag_num) {
-  unsigned long mask = 1;
-  return ((flags & (mask << flag_num)) > 0);  // return exactly 1 or 0
+  return (flags >> flag_num) & 1UL;
 }
 char count_set_flags(unsigned long flags) {
   char flag_count = 0;
   for(char ff = 0; ff < 32; ff++) {
-      flag_count += (flags & 1);
+      flag_count += (flags & 1UL);
       flags >>= 1;
   }
   return flag_count;
@@ -184,7 +181,7 @@ char count_set_flags(unsigned long flags) {
 char next_set_flag(unsigned long flags, char n) {
   char flag_count = 0;
   for(char ff = 0; ff < 32; ff++) {
-    if(flags & 1) {
+    if(flags & 1UL) {
       if(flag_count == n)
         return ff;
       flag_count++;
