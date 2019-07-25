@@ -97,10 +97,11 @@ int blink_countdown = 0;
 #define NUM_MODESETS  5  // 0 - lift, 1,2,3 - switches, 4 - lift stop
 
 // map keypad number to number in the LED chain
-char keymap[NUM_KEYS] = {7,   // KEY_P
-                         6, 8, 5, 9, 4, 10, 3, 11, 2, 12,  // DIGITS
-                         6, 8, 5, 9, 4, 10, 3, 11, 2, 12,  // DIGITS
-                         1, 0};                            // KEY_STOP, KEY_BELL
+char map_key_to_led[NUM_KEYS] = 
+        {7,                                // KEY_P
+         6, 8, 5, 9, 4, 10, 3, 11, 2, 12,  // DIGITS
+         6, 8, 5, 9, 4, 10, 3, 11, 2, 12,  // DIGITS
+         1, 0};                            // KEY_STOP, KEY_BELL
 char mode[NUM_MODESETS][NUM_KEYS];
 char physical_key[NUM_PHYS_KEYS];
 char key[NUM_KEYS];      // 0 - released, 1 - pressed
@@ -141,7 +142,7 @@ int state_countdown = 0;
 // FLOOR related declarations
 char curr_floor = 0;
 char target_floor = 0;
-int dir = 1;
+char dir = 1;
 char floors[NUM_FLOORS];  // !!! was [NUM_KEYS]; make sure it is not required
 
 
@@ -349,20 +350,6 @@ char is_above(char curr_floor) {
 }
 
 
-// manage key modes
-unsigned long modeset[NUM_MODESETS][5] =
-{{4, CRGB::Red, CRGB::Yellow, CRGB::Green, CRGB::Blue},   // func keys
- {2, CRGB::Black, CRGB::Yellow},              // switches
- {2, CRGB::Black, CRGB::Green},              // switches
- {2, CRGB::Black, CRGB::Blue},              // switches
- {1, CRGB::Black}};            // Floor STOP key
- 
-#define MODESET_FUNCKEYS      0
-#define MODESET_SWITCHES_1    1
-#define MODESET_SWITCHES_2    2
-#define MODESET_SWITCHES_3    3
-#define MODESET_FLOOR_STOP    4
-
 /*
  * Connector -> Shift Register (SR) pin -> IC pin mapping:
  * Conn 1           Conn 5
@@ -398,6 +385,22 @@ unsigned char map_key_to_sr[1][KEY_DIGIT_MAX - KEY_DIGIT_MIN + 1] =
  * type 1 (bistable relay): 18, 17, 16, 23
  * type 0 (regular boolean): 24, 25, 26, 27, 28, 29, 30, 31
  */
+
+
+
+// manage key modes
+unsigned long modeset[NUM_MODESETS][5] =
+{{4, CRGB::Red, CRGB::Yellow, CRGB::Green, CRGB::Blue},   // func keys
+ {2, CRGB::Black, CRGB::Yellow},              // switches
+ {2, CRGB::Black, CRGB::Green},              // switches
+ {2, CRGB::Black, CRGB::Blue},              // switches
+ {1, CRGB::Black}};            // Floor STOP key
+ 
+#define MODESET_FUNCKEYS      0
+#define MODESET_SWITCHES_1    1
+#define MODESET_SWITCHES_2    2
+#define MODESET_SWITCHES_3    3
+#define MODESET_FLOOR_STOP    4
 
 // set key to next color in given modeset
 void next_mode(char key_num, char modeset_num) {
@@ -501,17 +504,17 @@ void display_based_on_floor(char from_key, char to_key) {
   for(key_num=from_key; key_num<=to_key; key_num++)
     if(key_num == curr_floor) {
       if(blink_state && sleep_countdown)
-        leds[keymap[key_num]] = CRGB::Red;
+        leds[map_key_to_led[key_num]] = CRGB::Red;
       else
-        leds[keymap[key_num]] = CRGB::Black;
+        leds[map_key_to_led[key_num]] = CRGB::Black;
       if(sleep_countdown)
-        leds[keymap[key_num]] = (((long)blink_countdown * 256) / BLINK_TIME) << 16;
+        leds[map_key_to_led[key_num]] = (((long)blink_countdown * 256) / BLINK_TIME) << 16;
     }
     else {
       if(floors[key_num] > 0)
-        leds[keymap[key_num]] = 0x888888;  // CRGB::AntiqueWhite;  //CRGB::White;
+        leds[map_key_to_led[key_num]] = 0x888888;  // CRGB::AntiqueWhite;  //CRGB::White;
       else
-        leds[keymap[key_num]] = CRGB::Black;
+        leds[map_key_to_led[key_num]] = CRGB::Black;
     }
 }
 
@@ -534,27 +537,27 @@ void display_based_on_mode(char from_led, char to_led, char modeset_num, char ke
 
       if(key_num == KEY_BELL) {
         if(key_countdown[key_num] > 0)  // recently pressed
-          leds[keymap[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]+1];
+          leds[map_key_to_led[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]+1];
         else                            // idle for long time
-          leds[keymap[key_num]] = CRGB::Black;
+          leds[map_key_to_led[key_num]] = CRGB::Black;
       }
       else
-        leds[keymap[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]+1];
+        leds[map_key_to_led[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]+1];
     }
 }
-
+/*
 void dim_turned_off_by_group(char driver_key_mode, char from_key, char to_key) {
     for(key_num=from_key; key_num <= to_key; key_num++) {
       if(driver_key_mode == CRGB::Black) {
-          leds[keymap[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]];
+          leds[map_key_to_led[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]];
       }
       else
-          leds[keymap[key_num]].setRGB(((CRGB)modeset[modeset_num][mode[modeset_num][key_num]]).r / 2,
+          leds[map_key_to_led[key_num]].setRGB(((CRGB)modeset[modeset_num][mode[modeset_num][key_num]]).r / 2,
                                        ((CRGB)modeset[modeset_num][mode[modeset_num][key_num]]).g / 2,
                                        ((CRGB)modeset[modeset_num][mode[modeset_num][key_num]]).b / 2);
     }  
 }
-
+*/
 
 
 
@@ -1775,7 +1778,7 @@ void process_event_ring_tick() {
 }
 
 
-int add_to_event_ring(char sr_pin_num, char polarity) {
+void add_to_event_ring(char sr_pin_num, char polarity) {
   // if ering current capacity allows
   if(ering_tail < MAX_ERING - 1 && ering_tail != ering_head -1 ||
      ering_tail == MAX_ERING - 1 && ering_head != 0) {
@@ -1813,31 +1816,32 @@ void display_debug_2() {
     // debug display - mark state and dir on the keypad
     /*
     if(state == DOOR_OPEN)
-      leds[keymap[0]] = CRGB::Green;
+      leds[map_key_to_led[0]] = CRGB::Green;
       
     if(dir == -1)
-      leds[keymap[1]] = CRGB::Green;
+      leds[map_key_to_led[1]] = CRGB::Green;
     else if(dir == 0)
-      leds[keymap[2]] = CRGB::Green;
+      leds[map_key_to_led[2]] = CRGB::Green;
     else
-      leds[keymap[3]] = CRGB::Green;
+      leds[map_key_to_led[3]] = CRGB::Green;
     */
 
-    
+    /*
     unsigned char dd = 0;
     for (unsigned char ff=0; ff < MAX_ERING; ff++) {
       if(duration > 0)
         dd++;
     }
     if(dd < NUM_KEYS)
-      leds[keymap[dd]] = CRGB::Blue;
+      leds[map_key_to_led[dd]] = CRGB::Blue;
 
     if(ering_head < NUM_KEYS)
-      leds[keymap[ering_head]] = CRGB::Green;
+      leds[map_key_to_led[ering_head]] = CRGB::Green;
     if(ering_tail < NUM_KEYS)
-      leds[keymap[ering_tail]] = CRGB::Red;
+      leds[map_key_to_led[ering_tail]] = CRGB::Red;
 
     leds[0] = CRGB::Blue;
+    */
 }
 
 
@@ -1926,10 +1930,8 @@ void setup() {
 
 void loop() {
 
-  // process switch event ring
+  // process switch register event ring
   process_event_ring_tick();
-  //clean_event_ring();
-  //send_to_sr(0xff00);
 
   // process speaking queue
   spk_que_tick();
@@ -2237,7 +2239,7 @@ void loop() {
         }
       }
       display_based_on_floor(0, 10);  // from key, to_key
-      // uses: curr_floor, blink_state, sleep_countdown, blink_countdown, leds[], keymap[], floors[]
+      // uses: curr_floor, blink_state, sleep_countdown, blink_countdown, leds[], map_key_to_led[], floors[]
 
       // handle STOP key (KEY_STOP)
       manage_key_mode(MODESET_FLOOR_STOP);  // from key, to key, mode set
@@ -2247,7 +2249,7 @@ void loop() {
     else
     if(mode[0][KEY_BELL] == 1) {
       // Switch/Toggle mode
-      manage_key_mode(MODESET_SWITCHES_1);  // from key, to key, mode set
+      manage_key_mode(MODESET_SWITCHES_1);
       // display keys from grround floor (LED_P) through numbered floors, up to LED_STOP
       // All these keys use MODESET_SWITCHES_x modeset (color set) in non lift modes.
       display_based_on_mode(LED_P, LED_STOP, MODESET_SWITCHES_1, mode[MODESET_SWITCHES_1][KEY_P]);
@@ -2261,16 +2263,15 @@ void loop() {
     if(mode[0][KEY_BELL] == 3) {
       manage_key_mode(MODESET_SWITCHES_3);
       display_based_on_mode(LED_P, LED_STOP, MODESET_SWITCHES_3, mode[MODESET_SWITCHES_3][KEY_P]);
-      //dim_turned_off_by_group(mode[mode[0][KEY_BELL]][11], 0, 10);
     }
   } //else debug
 
 
 
   // DISPLAY key KEY_BELL
-  //display_based_on_mode(11, 11, mode[0][KEY_BELL]);  // key BELL determines modeset for other keys
+  // key BELL determines modeset for other keys
   display_based_on_mode(LED_BELL, LED_BELL, MODESET_FUNCKEYS, NO_MATTER);
-  // uses: key_num, key_countdown[], mode[][], leds[], keymap[]
+  // uses: key_num, key_countdown[], mode[][], leds[], map_key_to_led[]
 
 
   if(blink_countdown > 0)
