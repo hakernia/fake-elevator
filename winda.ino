@@ -94,7 +94,7 @@ int blink_countdown = 0;
 #define COL_3   A1
 #define COL_4   A2
 
-#define NUM_MODESETS  5  // 0 - lift, 1,2,3 - switches, 4 - lift stop
+#define NUM_KEY_MODES  5  // 0 - lift, 1,2,3 - switches, 4 - lift stop
 
 // map keypad number to number in the LED chain
 char map_key_to_led[NUM_KEYS] = 
@@ -102,8 +102,7 @@ char map_key_to_led[NUM_KEYS] =
          6, 8, 5, 9, 4, 10, 3, 11, 2, 12,  // DIGITS
          6, 8, 5, 9, 4, 10, 3, 11, 2, 12,  // DIGITS
          1, 0};                            // KEY_STOP, KEY_BELL
-char mode[NUM_MODESETS][NUM_KEYS];
-//char physical_key[NUM_PHYS_KEYS];
+char key_state[NUM_KEY_MODES][NUM_KEYS];
 char key[NUM_KEYS];      // 0 - released, 1 - pressed
 char last_key[NUM_KEYS]; // last state of key; used to detect a change
 #define MAX_KEY_COUNTDOWN  3000
@@ -147,8 +146,8 @@ char floors[NUM_FLOORS];  // !!! was [NUM_KEYS]; make sure it is not required
 
 
 char ff;
-char modeset_num = 0;
-char last_active_modeset_num = 0;
+char key_mode = 0;
+char last_active_key_mode = 0;
 
 
 
@@ -370,51 +369,51 @@ unsigned char map_key_to_sr[1][KEY_DIGIT_MAX - KEY_DIGIT_MIN + 1] =
 
 
 // manage key modes
-unsigned long modeset[NUM_MODESETS][5] =
+unsigned long modeset[NUM_KEY_MODES][5] =
 {{4, CRGB::Red, CRGB::Yellow, CRGB::Green, CRGB::Blue},   // func keys
  {2, CRGB::Black, CRGB::Yellow},              // switches
  {2, CRGB::Black, CRGB::Green},              // switches
  {2, CRGB::Black, CRGB::Blue},              // switches
  {1, CRGB::Black}};            // Floor STOP key
  
-#define MODESET_FUNCKEYS      0
-#define MODESET_SWITCHES_1    1
-#define MODESET_SWITCHES_2    2
-#define MODESET_SWITCHES_3    3
-#define MODESET_FLOOR_STOP    4
+#define KEY_MODE_FUNCKEYS      0
+#define KEY_MODE_SWITCHES_1    1
+#define KEY_MODE_SWITCHES_2    2
+#define KEY_MODE_SWITCHES_3    3
+#define KEY_MODE_FLOOR_STOP    4
 
 // set key to next color in given modeset
-void next_mode(char key_num, char modeset_num) {
-  if(mode[modeset_num][key_num] < modeset[modeset_num][0]-1) 
-    mode[modeset_num][key_num]++;
+void next_key_state(char key_num, char key_mode) {
+  if(key_state[key_mode][key_num] < modeset[key_mode][0]-1) 
+    key_state[key_mode][key_num]++;
   else 
-    mode[modeset_num][key_num] = 0;
+    key_state[key_mode][key_num] = 0;
 }
-void switch_mode_while_visible(char key_num, char modeset_num) {
+void switch_key_state_while_visible(char key_num, char key_mode) {
   // used by bell key so assume key_num == KEY_BELL
-  //                        and modeset_num == MODESET_FUNCKEYS
+  //                        and key_mode == KEY_MODE_FUNCKEYS
   // Switch mode only if pressed while lit.
   if(last_key[key_num] != key[key_num] &&   // just pressed or released
      key_press_countdown[key_num] > 0)      // and no long press
     if(key_countdown[key_num] > 0) {        // and did not sleep at the moment
-      next_mode(key_num, modeset_num);      // KEY_BELL's mode determines modeset_num
+      next_key_state(key_num, key_mode);      // KEY_BELL's mode determines key_mode
     }
 }
-void switch_mode(char key_num, char modeset_num) {  // used by all except bell key
+void switch_key_state(char key_num, char key_mode) {  // used by all except bell key
   if(last_key[key_num] != key[key_num] &&    // just pressed or released
      key_press_countdown[key_num] > 0) {     // and no long press
-      next_mode(key_num, modeset_num);
+      next_key_state(key_num, key_mode);
   }
 }
-void key_state_to_sr_pin(char key_num, char modeset_num) {  // used by individual digit keys
+void key_state_to_sr_pin(char key_num, char key_mode) {  // used by individual digit keys
   if(last_key[key_num] != key[key_num] &&    // just pressed or released
      key_press_countdown[key_num] > 0) {     // and no long press
       // Update queue of shift register pins events
-      if(mode[modeset_num][KEY_STOP])                             // key stop is active
+      if(key_state[key_mode][KEY_STOP])                             // key stop is active
       if(key_num >= KEY_DIGIT_MIN && key_num <= KEY_DIGIT_MAX) {  // number keys only
-        if(mode[modeset_num][key_num]) {
+        if(key_state[key_mode][key_num]) {
           switch_sr_pin(map_key_to_sr[0][key_num-1], 1); // sr_pin_num, polarity
-          last_active_modeset_num = modeset_num;
+          last_active_key_mode = key_mode;
         }
         else
           switch_sr_pin(map_key_to_sr[0][key_num-1], 0); // sr_pin_num, polarity
@@ -423,60 +422,60 @@ void key_state_to_sr_pin(char key_num, char modeset_num) {  // used by individua
 }
 void all_digits_off() {
   for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
-    if(mode[last_active_modeset_num][ff])
+    if(key_state[last_active_key_mode][ff])
       switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], 0);
   }
-  mode[last_active_modeset_num][KEY_STOP] = 0;  // turn off STOP key in last modeset
+  key_state[last_active_key_mode][KEY_STOP] = 0;  // turn off STOP key in last modeset
 }
-void key_state_to_sr_pin_bulk(char key_num, char modeset_num) {  // used by stop key
+void key_state_to_sr_pin_bulk(char key_num, char key_mode) {  // used by stop key
   if(last_key[key_num] != key[key_num] &&    // just pressed or released
      key_press_countdown[key_num] > 0) {     // and no long press
-      if(last_active_modeset_num != modeset_num)  // modeset changed
+      if(last_active_key_mode != key_mode)  // modeset changed
         all_digits_off();                         // initially turn off previous modeset's keys
       // Update queue with all digits ON if key STOP is pressed
       for(unsigned char ff = KEY_DIGIT_MIN; ff <= KEY_DIGIT_MAX; ff++) {
-        if(mode[modeset_num][ff])                 // the key ff is ON
-          switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], mode[modeset_num][KEY_STOP]);
-        if(mode[modeset_num][KEY_STOP])
-          last_active_modeset_num = modeset_num;
+        if(key_state[key_mode][ff])                 // the key ff is ON
+          switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], key_state[key_mode][KEY_STOP]);
+        if(key_state[key_mode][KEY_STOP])
+          last_active_key_mode = key_mode;
       }
   }
 }
-void handle_long_press(char key_num, char modeset_num) {  // used by stop key
+void handle_long_press(char key_num, char key_mode) {  // used by stop key
   if(key_press_countdown[key_num] == 0) { // long pressed
     key_press_countdown[key_num] = -1;    // avoid reexecution at the next tick
     // Update all digits to ON or OFF if key STOP is pressed long
     for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
-      if(mode[modeset_num][KEY_STOP] != mode[modeset_num][ff]) {
+      if(key_state[key_mode][KEY_STOP] != key_state[key_mode][ff]) {
           // update to mode of the stop key
-          next_mode(ff, modeset_num);
-          switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], mode[modeset_num][KEY_STOP]);
-          if(mode[modeset_num][KEY_STOP])
-            last_active_modeset_num = modeset_num;
+          next_key_state(ff, key_mode);
+          switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], key_state[key_mode][KEY_STOP]);
+          if(key_state[key_mode][KEY_STOP])
+            last_active_key_mode = key_mode;
       }
     }
   }
 }
 // Go through all keys and for pressed ones modify their state (mode)
-void manage_key_mode(char modeset_num) {
+void manage_key_state(char key_mode) {
   if(key[KEY_BELL]) {
-    switch_mode_while_visible(KEY_BELL, modeset_num);
+    switch_key_state_while_visible(KEY_BELL, key_mode);
   }
   if(key[KEY_P]) {
-    switch_mode(KEY_P, modeset_num);
+    switch_key_state(KEY_P, key_mode);
   }
   if(key[KEY_STOP]) {
-    //switch_mode(KEY_STOP, modeset_num);  // just pressed
-    //key_state_to_sr_pin_bulk(KEY_STOP, modeset_num); // just pressed
-    handle_long_press(KEY_STOP, modeset_num);
+    //switch_key_state(KEY_STOP, key_mode);  // just pressed
+    //key_state_to_sr_pin_bulk(KEY_STOP, key_mode); // just pressed
+    handle_long_press(KEY_STOP, key_mode);
   } else {
-    switch_mode(KEY_STOP, modeset_num);  // just released
-    key_state_to_sr_pin_bulk(KEY_STOP, modeset_num); // just released
+    switch_key_state(KEY_STOP, key_mode);  // just released
+    key_state_to_sr_pin_bulk(KEY_STOP, key_mode); // just released
   }
   for(key_num=KEY_DIGIT_MIN; key_num<=KEY_DIGIT_MAX; key_num++) {
     if(key[key_num]) {
-      switch_mode(key_num, modeset_num);
-      key_state_to_sr_pin(key_num, modeset_num);
+      switch_key_state(key_num, key_mode);
+      key_state_to_sr_pin(key_num, key_mode);
     }
   }
 }
@@ -499,7 +498,7 @@ void display_based_on_floor(char from_key, char to_key) {
     }
 }
 
-void display_based_on_mode(char from_led, char to_led, char modeset_num, char key_p_state) {
+void display_based_on_mode(char from_led, char to_led, char key_mode, char key_p_state) {
     // lit up the right mode if recently pressed; turn off if slept long 
     char led_num;
     for(led_num=from_led; led_num <= to_led; led_num++) {
@@ -518,24 +517,24 @@ void display_based_on_mode(char from_led, char to_led, char modeset_num, char ke
 
       if(key_num == KEY_BELL) {
         if(key_countdown[key_num] > 0)  // recently pressed
-          leds[map_key_to_led[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]+1];
+          leds[map_key_to_led[key_num]] = modeset[key_mode][key_state[key_mode][key_num]+1];
         else                            // idle for long time
           leds[map_key_to_led[key_num]] = CRGB::Black;
       }
       else
-        leds[map_key_to_led[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]+1];
+        leds[map_key_to_led[key_num]] = modeset[key_mode][key_state[key_mode][key_num]+1];
     }
 }
 /*
 void dim_turned_off_by_group(char driver_key_mode, char from_key, char to_key) {
     for(key_num=from_key; key_num <= to_key; key_num++) {
       if(driver_key_mode == CRGB::Black) {
-          leds[map_key_to_led[key_num]] = modeset[modeset_num][mode[modeset_num][key_num]];
+          leds[map_key_to_led[key_num]] = modeset[key_mode][key_state[key_mode][key_num]];
       }
       else
-          leds[map_key_to_led[key_num]].setRGB(((CRGB)modeset[modeset_num][mode[modeset_num][key_num]]).r / 2,
-                                       ((CRGB)modeset[modeset_num][mode[modeset_num][key_num]]).g / 2,
-                                       ((CRGB)modeset[modeset_num][mode[modeset_num][key_num]]).b / 2);
+          leds[map_key_to_led[key_num]].setRGB(((CRGB)modeset[key_mode][key_state[key_mode][key_num]]).r / 2,
+                                       ((CRGB)modeset[key_mode][key_state[key_mode][key_num]]).g / 2,
+                                       ((CRGB)modeset[key_mode][key_state[key_mode][key_num]]).b / 2);
     }  
 }
 */
@@ -1863,15 +1862,15 @@ void setup() {
       FastLED.addLeds<NEOPIXEL, DATA_PIN>(leds, NUM_LEDS);
 
       // initialize each key's mode
-      for(modeset_num=0; modeset_num < NUM_MODESETS; modeset_num++)
+      for(key_mode=0; key_mode < NUM_KEY_MODES; key_mode++)
       for(key_num=0; key_num<NUM_KEYS; key_num++) {
-        mode[modeset_num][key_num] = 0;
+        key_state[key_mode][key_num] = 0;
       }
       // preset some keys initially so base lights may be turned ON with one click
       for(key_num=1; key_num<=6; key_num++) {
-        mode[MODESET_SWITCHES_1][key_num] = 1;
+        key_state[KEY_MODE_SWITCHES_1][key_num] = 1;
       }
-      mode[MODESET_FUNCKEYS][KEY_BELL] = 1;  // set mode to first light bank
+      key_state[KEY_MODE_FUNCKEYS][KEY_BELL] = 1;  // set mode to first light bank
       
       for(ff=0; ff<NUM_KEYS; ff++) {
         key_countdown[ff] = MAX_KEY_COUNTDOWN;
@@ -2195,12 +2194,12 @@ void loop() {
   countdownKbd(0, 22);  // calculate long press and fade for key range
   memcpy(last_key, key, sizeof(last_key));
   readKbd();
-  mapPhysKeyToKey(mode[0][KEY_BELL],            // key 22 - bell, its state determines mode
-                  mode[ mode[0][KEY_BELL] ][0]);  // key 0 - P, its state determines digits bank
+  mapPhysKeyToKey(key_state[0][KEY_BELL],            // key 22 - bell, its state determines mode
+                  key_state[ key_state[0][KEY_BELL] ][0]);  // key 0 - P, its state determines digits bank
 
   if(key[KEY_BELL]) {
     // Switch mode only if pressed while lit.
-    switch_mode_while_visible(KEY_BELL, MODESET_FUNCKEYS);
+    switch_key_state_while_visible(KEY_BELL, KEY_MODE_FUNCKEYS);
     // DEBUG DISPLAY for key 12
     display_debug_2();
   }
@@ -2209,7 +2208,7 @@ void loop() {
       state = LIFT_START_FALLING;
     }
     // REGULAR DISPLAY
-    if(mode[0][KEY_BELL] == 0) {
+    if(key_state[0][KEY_BELL] == 0) {
       // Lift mode
       // detect if key_pressed and update floors[]
       key_pressed = false;
@@ -2223,27 +2222,27 @@ void loop() {
       // uses: curr_floor, blink_state, sleep_countdown, blink_countdown, leds[], map_key_to_led[], floors[]
 
       // handle STOP key (KEY_STOP)
-      manage_key_mode(MODESET_FLOOR_STOP);  // from key, to key, mode set
-      // display STOP key. In lift mode it uses MODESET_FLOOR_STOP modeset (only black color in this color set)
-      display_based_on_mode(LED_STOP, LED_STOP, MODESET_FLOOR_STOP, mode[MODESET_FLOOR_STOP][KEY_P]);
+      manage_key_state(KEY_MODE_FLOOR_STOP);  // from key, to key, mode set
+      // display STOP key. In lift mode it uses KEY_MODE_FLOOR_STOP modeset (only black color in this color set)
+      display_based_on_mode(LED_STOP, LED_STOP, KEY_MODE_FLOOR_STOP, key_state[KEY_MODE_FLOOR_STOP][KEY_P]);
     }
     else
-    if(mode[0][KEY_BELL] == 1) {
+    if(key_state[0][KEY_BELL] == 1) {
       // Switch/Toggle mode
-      manage_key_mode(MODESET_SWITCHES_1);
+      manage_key_state(KEY_MODE_SWITCHES_1);
       // display keys from grround floor (LED_P) through numbered floors, up to LED_STOP
-      // All these keys use MODESET_SWITCHES_x modeset (color set) in non lift modes.
-      display_based_on_mode(LED_P, LED_STOP, MODESET_SWITCHES_1, mode[MODESET_SWITCHES_1][KEY_P]);
+      // All these keys use KEY_MODE_SWITCHES_x modeset (color set) in non lift modes.
+      display_based_on_mode(LED_P, LED_STOP, KEY_MODE_SWITCHES_1, key_state[KEY_MODE_SWITCHES_1][KEY_P]);
     }
     else
-    if(mode[0][KEY_BELL] == 2) {
-      manage_key_mode(MODESET_SWITCHES_2);
-      display_based_on_mode(LED_P, LED_STOP, MODESET_SWITCHES_2, mode[MODESET_SWITCHES_2][KEY_P]);
+    if(key_state[0][KEY_BELL] == 2) {
+      manage_key_state(KEY_MODE_SWITCHES_2);
+      display_based_on_mode(LED_P, LED_STOP, KEY_MODE_SWITCHES_2, key_state[KEY_MODE_SWITCHES_2][KEY_P]);
     }
     else
-    if(mode[0][KEY_BELL] == 3) {
-      manage_key_mode(MODESET_SWITCHES_3);
-      display_based_on_mode(LED_P, LED_STOP, MODESET_SWITCHES_3, mode[MODESET_SWITCHES_3][KEY_P]);
+    if(key_state[0][KEY_BELL] == 3) {
+      manage_key_state(KEY_MODE_SWITCHES_3);
+      display_based_on_mode(LED_P, LED_STOP, KEY_MODE_SWITCHES_3, key_state[KEY_MODE_SWITCHES_3][KEY_P]);
     }
   } //else debug
 
@@ -2251,8 +2250,8 @@ void loop() {
 
   // DISPLAY key KEY_BELL
   // key BELL determines modeset for other keys
-  display_based_on_mode(LED_BELL, LED_BELL, MODESET_FUNCKEYS, NO_MATTER);
-  // uses: key_num, key_countdown[], mode[][], leds[], map_key_to_led[]
+  display_based_on_mode(LED_BELL, LED_BELL, KEY_MODE_FUNCKEYS, NO_MATTER);
+  // uses: key_num, key_countdown[], key_state[][], leds[], map_key_to_led[]
 
 
   if(blink_countdown > 0)
