@@ -422,7 +422,7 @@ void switch_mode(char key_num, char modeset_num) {  // used by all except bell k
       next_mode(key_num, modeset_num);
   }
 }
-void handle_queue(char key_num, char modeset_num) {  // used by individual digit keys
+void key_state_to_sr_pin(char key_num, char modeset_num) {  // used by individual digit keys
   if(last_key[key_num] != key[key_num] &&    // just pressed or released
      key_press_countdown[key_num] > 0) {     // and no long press
       // Update queue of shift register pins events
@@ -444,13 +444,13 @@ void all_digits_off() {
   }
   mode[last_active_modeset_num][KEY_STOP] = 0;  // turn off STOP key in last modeset
 }
-void handle_queue_bulk(char key_num, char modeset_num) {  // used by stop key
+void key_state_to_sr_pin_bulk(char key_num, char modeset_num) {  // used by stop key
   if(last_key[key_num] != key[key_num] &&    // just pressed or released
      key_press_countdown[key_num] > 0) {     // and no long press
       if(last_active_modeset_num != modeset_num)  // modeset changed
         all_digits_off();                         // initially turn off previous modeset's keys
       // Update queue with all digits ON if key STOP is pressed
-      for(unsigned char ff = KEY_DIGIT_MIN; ff<=KEY_DIGIT_MAX; ff++) {
+      for(unsigned char ff = KEY_DIGIT_MIN; ff <= KEY_DIGIT_MAX; ff++) {
         if(mode[modeset_num][ff])                 // the key ff is ON
           switch_sr_pin(map_key_to_sr[0][ff-KEY_DIGIT_MIN], mode[modeset_num][KEY_STOP]);
         if(mode[modeset_num][KEY_STOP])
@@ -483,16 +483,16 @@ void manage_key_mode(char modeset_num) {
   }
   if(key[KEY_STOP]) {
     //switch_mode(KEY_STOP, modeset_num);  // just pressed
-    //handle_queue_bulk(KEY_STOP, modeset_num); // just pressed
+    //key_state_to_sr_pin_bulk(KEY_STOP, modeset_num); // just pressed
     handle_long_press(KEY_STOP, modeset_num);
   } else {
     switch_mode(KEY_STOP, modeset_num);  // just released
-    handle_queue_bulk(KEY_STOP, modeset_num); // just released
+    key_state_to_sr_pin_bulk(KEY_STOP, modeset_num); // just released
   }
   for(key_num=KEY_DIGIT_MIN; key_num<=KEY_DIGIT_MAX; key_num++) {
     if(key[key_num]) {
       switch_mode(key_num, modeset_num);
-      handle_queue(key_num, modeset_num);
+      key_state_to_sr_pin(key_num, modeset_num);
     }
   }
 }
