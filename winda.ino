@@ -103,7 +103,7 @@ char map_key_to_led[NUM_KEYS] =
          6, 8, 5, 9, 4, 10, 3, 11, 2, 12,  // DIGITS
          1, 0};                            // KEY_STOP, KEY_BELL
 char mode[NUM_MODESETS][NUM_KEYS];
-char physical_key[NUM_PHYS_KEYS];
+//char physical_key[NUM_PHYS_KEYS];
 char key[NUM_KEYS];      // 0 - released, 1 - pressed
 char last_key[NUM_KEYS]; // last state of key; used to detect a change
 #define MAX_KEY_COUNTDOWN  3000
@@ -201,21 +201,21 @@ void readKbd() {
   //digitalWrite(ROW_1, LOW);
   pinMode(ROW_1, OUTPUT);
     if(digitalRead(COL_1) == LOW)
-      physical_key[10] = 1;
+      key[10] = 1;
     else
-      physical_key[10] = 0;
+      key[10] = 0;
     if(digitalRead(COL_2) == LOW)
-      physical_key[8] = 1;
+      key[8] = 1;
     else
-      physical_key[8] = 0;
+      key[8] = 0;
     if(digitalRead(COL_3) == LOW)
-      physical_key[6] = 1;
+      key[6] = 1;
     else
-      physical_key[6] = 0;
+      key[6] = 0;
     if(digitalRead(COL_4) == LOW)
-      physical_key[4] = 1;
+      key[4] = 1;
     else
-      physical_key[4] = 0;
+      key[4] = 0;
   pinMode(ROW_1, INPUT);
   //digitalWrite(ROW_1, HIGH);
   
@@ -223,90 +223,74 @@ void readKbd() {
   //digitalWrite(ROW_2, LOW);
   pinMode(ROW_2, OUTPUT);
   if(digitalRead(COL_1) == LOW)
-      physical_key[2] = 1;
+      key[2] = 1;
     else
-      physical_key[2] = 0;
+      key[2] = 0;
     if(digitalRead(COL_2) == LOW)
-      physical_key[0] = 1;
+      key[0] = 1;
     else
-      physical_key[0] = 0;
+      key[0] = 0;
     if(digitalRead(COL_3) == LOW)
-      physical_key[1] = 1;
+      key[1] = 1;
     else
-      physical_key[1] = 0;
+      key[1] = 0;
     if(digitalRead(COL_4) == LOW)
-      physical_key[3] = 1;
+      key[3] = 1;
     else
-      physical_key[3] = 0;
+      key[3] = 0;
   pinMode(ROW_2, INPUT);
   //digitalWrite(ROW_2, HIGH);
   
   //digitalWrite(ROW_3, LOW);
   pinMode(ROW_3, OUTPUT);
     if(digitalRead(COL_1) == LOW)
-      physical_key[5] = 1;
+      key[5] = 1;
     else
-      physical_key[5] = 0;
+      key[5] = 0;
     if(digitalRead(COL_2) == LOW)
-      physical_key[7] = 1;
+      key[7] = 1;
     else
-      physical_key[7] = 0;
+      key[7] = 0;
     if(digitalRead(COL_3) == LOW)
-      physical_key[9] = 1;
+      key[9] = 1;
     else
-      physical_key[9] = 0;
+      key[9] = 0;
 /*    if(digitalRead(COL_4) == LOW)
-      physical_key[4] = 1;
+      key[4] = 1;
     else
-      physical_key[4] = 0;  */
+      key[4] = 0;  */
   pinMode(ROW_3, INPUT);
   //digitalWrite(ROW_3, HIGH);
   
   //digitalWrite(ROW_4, LOW);
   pinMode(ROW_4, OUTPUT);  
     if(digitalRead(COL_1) == LOW)
-      physical_key[11] = 1;
+      key[21] = 1;
     else
-      physical_key[11] = 0;
+      key[21] = 0;
     if(digitalRead(COL_2) == LOW)
-      physical_key[12] = 1;
+      key[22] = 1;
     else
-      physical_key[12] = 0;
+      key[22] = 0;
 /*    if(digitalRead(COL_3) == LOW)
-      physical_key[6] = 1;
+      key[6] = 1;
     else
-      physical_key[6] = 0;
+      key[6] = 0;
     if(digitalRead(COL_4) == LOW)
-      physical_key[4] = 1;
+      key[4] = 1;
     else
-      physical_key[4] = 0;  */
+      key[4] = 0;  */
   pinMode(ROW_4, INPUT);
   //digitalWrite(ROW_4, HIGH);
 }
 
+// mode 0: lift
+// mode 1-5: switches
+// only switches, when key P pressed
 void mapPhysKeyToKey(char mode, char key_p_state) {
-  switch(mode) {
-    case 0:  // lift
-            memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]) * 11);
-            memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
-            break;
-            
-            // switches
-    case 1:
-    case 2:
-    case 3:
-    case 4: if(key_p_state == 0) {  // P key is OFF
-              // copy keys normal way, digits to lower bank
-              memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]) * 11);
-              memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
-            }
-            else {
-              // P key is ON -> copy digit keys to upper bank
-              memcpy(&key[0], &physical_key[0], sizeof(physical_key[0]));
-              memcpy(&key[11], &physical_key[1], sizeof(physical_key[1]) * 10);
-              memcpy(&key[21], &physical_key[11], sizeof(physical_key[11]) * 2);
-            }
-            break;
+  if(mode && key_p_state) {
+    memcpy(&key[11], &key[1], sizeof(key[1]) * 10);
+    memset(&key[1], 0, sizeof(key[1]) * 10);
   }
 }
 
