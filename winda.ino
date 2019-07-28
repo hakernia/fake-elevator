@@ -1053,12 +1053,12 @@ char is_person(char obj_idx) {  // obj_idx is an idx of lift_obj[]
   */
 }
 // checks if object id is a floor or a cabin (and not person or item)
-// return 0 or place id + 1 (there is no place idx!)
+// return -1 or place id (there is no place idx!)
 char is_place(char location) {
   if(location < NUM_FLOORS)
-    return location + 1;
+    return location;
   else
-    return 0;
+    return -1;
 }
 // checks if object(item) idx is located on person (owned by it) or not
 // return -1 or person_id
@@ -1072,9 +1072,9 @@ char is_item_on_person(char obj_idx) {
 }
 char is_at_place(char obj_idx) {
   if(obj_idx < 0)
-    return 0;
+    return -1;
   char location = (lift_obj[obj_idx] & 0x3F);
-  return is_place(location);  // is_place() returns place_id + 1, or 0
+  return is_place(location);  // is_place() returns place_id, or -1
 }
 
 
@@ -1112,7 +1112,7 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
           return false;    // no exit on ground floor if have doc to deliver
         else {
           if(smutni_target > -1 &&
-             is_at_place(smutni_target) == curr_floor+1) {
+             is_at_place(smutni_target) == curr_floor) {
             // target jest na tym pietrze, wysiadamy do niego
             return true;
           }
@@ -1320,7 +1320,7 @@ void communicate_possessions_in_cabin() {
   for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
     if((person = is_person(ff)) > 0) {
       person--; // is_person() returns id+1, to use 0 as false
-      if(is_at_place(person) == (PLACE_CABIN+1)) {
+      if(is_at_place(person) == (PLACE_CABIN)) {
         // person in cabin
         communicate_person_owns(person);
       }
@@ -1349,7 +1349,7 @@ char num_items_on_floor(char floor_num) {
   // loop through items and find those on the floor
   char own_count = 0;
   for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
-    if(is_at_place(ff) == floor_num+1) {
+    if(is_at_place(ff) == floor_num) {
       own_count++;
     }
   }
@@ -1360,7 +1360,7 @@ char communicate_floor_contains(char floor_num) {
   char own_count = 0;
   char item;
   for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
-    if(is_at_place(ff) == floor_num+1) {
+    if(is_at_place(ff) == floor_num) {
       if(own_count == 0) {
         add_spk(MSG_FLOOR_CONTAINS);
       }
@@ -1383,7 +1383,7 @@ void communicate_mystery_floor_gossip() {
   do {
     for(char person = 0; person < NUM_PERSONS; person++) {
       if(is_bit_flag(nuts_person_flags, person))
-      if(is_at_place(person) == (PLACE_CABIN+1)) {
+      if(is_at_place(person) == (PLACE_CABIN)) {
         nuts_count++;
         if(random(10) < nuts_count) {
           add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
@@ -1418,7 +1418,7 @@ void migrate_objs() {
   for(char ff = 0; ff < NUM_PERSONS; ff++) {
     if((person = is_person(ff)) > 0) {
       person--; // is_person() returns id+1, to use 0 as false
-      if((place = is_at_place(person)) == (PLACE_CABIN+1)) {
+      if((place = is_at_place(person)) == (PLACE_CABIN)) {
         place--;
         // person in cabin
         if(hospitalized_person == -2) {
@@ -1445,7 +1445,7 @@ void migrate_objs() {
   for(char ff = 0; ff < NUM_PERSONS; ff++) {
     if((person = is_person(ff)) > 0) {
       person--; // is_person() returns id+1, to use 0 as false
-      if((place = is_at_place(person)) == (curr_floor+1)) {
+      if((place = is_at_place(person)) == (curr_floor)) {
         place--;
         // person not in cabin
         if(!is_bit_flag(exiting_flags, person) && want_to_enter(person))
@@ -1454,11 +1454,11 @@ void migrate_objs() {
     }
   }
   // now force exits if srebrny dev entered the lift
-  if(is_at_place(PERSON_SREBRNY) == (PLACE_CABIN+1)) {
+  if(is_at_place(PERSON_SREBRNY) == (PLACE_CABIN)) {
     for(char ff = 0; ff < NUM_PERSONS; ff++) {
       if(ff == PERSON_SREBRNY)  // ignore srebrny
         continue;
-      if((is_at_place(ff)) == (PLACE_CABIN+1)) {
+      if((is_at_place(ff)) == (PLACE_CABIN)) {
         // person in cabin
         force_exit_lift(ff);
       }
@@ -1523,7 +1523,7 @@ void proceed_after_migration() {
   char person;
   char place;
   char other_person;
-  if(is_at_place(PERSON_WOLAND) == PLACE_MYSTERY_FLOOR+1) {     // woland exited on floor 11
+  if(is_at_place(PERSON_WOLAND) == PLACE_MYSTERY_FLOOR) {     // woland exited on floor 11
     move_person_by_stairs(PERSON_WOLAND, 0);  // move woland to ground floor
   }
   if(just_entered(PERSON_WOLAND))
@@ -1548,7 +1548,7 @@ void proceed_after_migration() {
   if(just_exited(PERSON_ANIA)) {
     // anuszka takes the oil if it is not on 6th floor
      if(curr_floor != 6) {
-       if(is_at_place(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor+1)
+       if(is_at_place(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor)
          pick_item(PERSON_ANIA, NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
      } else {
        if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANIA)
@@ -1559,7 +1559,7 @@ void proceed_after_migration() {
   if(just_exited(PERSON_ANUSZKA)) {
     // anuszka takes the oil if it is not on 6th floor
      if(curr_floor != 6) {
-       if(is_at_place(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor+1)
+       if(is_at_place(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor)
          pick_item(PERSON_ANUSZKA, NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
      } else {
        if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANUSZKA)
@@ -1571,7 +1571,7 @@ void proceed_after_migration() {
   for(char ff = 0; ff < NUM_PERSONS; ff++) {
     if((person = is_person(ff)) > 0) {
       person--; // is_person() returns id+1, to use 0 as false
-      if((place = is_at_place(person)) == (PLACE_CABIN+1)) {
+      if((place = is_at_place(person)) == (PLACE_CABIN)) {
         place--;
         switch(person) {
           case PERSON_ANUSZKA:
@@ -1607,7 +1607,7 @@ void proceed_after_migration() {
   if((just_exited(PERSON_SMUTNI) || person_loc(PERSON_SMUTNI) <= PLACE_GROUND_FLOOR) && // smutni wlasnie wyszli z windy lub sa poza budynkiem
      curr_floor == PLACE_GROUND_FLOOR &&        // jestesmy na parterze
      smutni_target == -1 &&                     // smutni nie maja w tej chwili targetu
-     is_at_place(NUM_PERSONS + ITEM_WYROK) == PLACE_GROUND_FLOOR+1) {  // wyrok mozna podniesc na parterze
+     is_at_place(NUM_PERSONS + ITEM_WYROK) == PLACE_GROUND_FLOOR) {  // wyrok mozna podniesc na parterze
     smutni_target = get_next_target();
     pick_item(PERSON_SMUTNI, ITEM_WYROK);
     lift_obj[PERSON_SMUTNI] = 0;
@@ -1628,7 +1628,7 @@ void proceed_after_migration() {
   for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
     if((person = is_person(ff)) > 0) {
       person--; // is_person() returns id+1, to use 0 as false
-      if((place = is_at_place(person)) == (PLACE_CABIN+1)) {
+      if((place = is_at_place(person)) == (PLACE_CABIN)) {
         place--;
         // person in cabin
         if(hospitalized_person == -2) {
@@ -1989,7 +1989,7 @@ void loop() {
              communicate_possessions_entered_to_cabin();
              communicate_target_of_entering_smutni();
              communicate_mystery_floor_gossip();
-             if(is_at_place(person_spy) == (PLACE_CABIN+1))
+             if(is_at_place(person_spy) == (PLACE_CABIN))
                communicate_floor_contains(curr_floor);
              clear_lift_world_queues();  // queues already loaded to communication
              //communicate_possessions_in_cabin();
