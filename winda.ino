@@ -831,11 +831,11 @@ void hospitalize(char person) {
 }
 
 char is_guilty(char person) {
-  if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person+1)
+  if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person)
     return ITEM_WYROK;
-  if(is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person+1)
+  if(is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person)
     return ITEM_NAKAZ;
-  if(is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person+1)
+  if(is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person)
     return ITEM_WEZWANIE;
   return 0;
 }
@@ -986,7 +986,7 @@ void drop_item(char item_idx) {
 }
 void drop_items(char person) {
   for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
-    if(is_item_on_person(ff) == person+1)
+    if(is_item_on_person(ff) == person)
       drop_item(ff);
   }
 }
@@ -1061,14 +1061,14 @@ char is_place(char location) {
     return 0;
 }
 // checks if object(item) idx is located on person (owned by it) or not
-// return 0 or person_id + 1
+// return -1 or person_id
 char is_item_on_person(char obj_idx) {
   char location_id = (lift_obj[obj_idx] & 0x3F);
   if(location_id < NUM_FLOORS)                  // it is on floor
-    return 0;
+    return -1;
   if(location_id >= NUM_FLOORS + NUM_PERSONS)   // it is on other item
-    return 0;
-  return location_id + 1 - NUM_FLOORS;
+    return -1;
+  return location_id - NUM_FLOORS;
 }
 char is_at_place(char obj_idx) {
   if(obj_idx < 0)
@@ -1083,7 +1083,7 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
     // ania/anuszka z olejem zawsze wysiada na 6, bez oleju na parterze
     case PERSON_ANIA:
     case PERSON_ANUSZKA:
-      if((is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY)) == person+1) {
+      if((is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY)) == person) {
       // ma olej
         if(curr_floor == 6)
           return true;
@@ -1104,9 +1104,9 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
       // if have nakaz, do not leave on parter
       // else if target is here, do not leave
       // else leave 30%
-      if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person+1 ||
-         is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person+1 ||
-         is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person+1) {
+      if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person ||
+         is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person ||
+         is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person) {
         // smutni maja przy sobie jakis wyrok lub nakaz
         if(curr_floor == PLACE_GROUND_FLOOR)
           return false;    // no exit on ground floor if have doc to deliver
@@ -1221,7 +1221,7 @@ char want_to_enter(char person) {
     // ania/anuszka z olejem zawsze wsiada na parterze
     case PERSON_ANIA:
     case PERSON_ANUSZKA:
-      if((is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY)) == person+1) {
+      if((is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY)) == person) {
       // ma olej
         if(curr_floor == 0)
           return true;
@@ -1298,7 +1298,7 @@ char communicate_person_owns(char person) {
   char own_count = 0;
   char item;
   for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
-    if(is_item_on_person(ff) == person+1) {
+    if(is_item_on_person(ff) == person) {
       if(own_count == 0) {
         add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
         add_spk(MSG_OWNS);
@@ -1538,7 +1538,7 @@ void proceed_after_migration() {
   if((hospitalized_person == -2 || hospitalized_person >= 0) &&     // there was a crash
      (just_exited(PERSON_ANUSZKA) || person_loc(PERSON_ANUSZKA) == PLACE_CABIN ||
       hospitalized_person == PERSON_ANUSZKA) && !just_entered(PERSON_ANUSZKA) && // anuszka was there
-     (is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANUSZKA+1) // anuszka had oil
+     (is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANUSZKA) // anuszka had oil
     ) {
     //anuszka_broke_oil = 1; // communicate broken oil
     set_bit_flag(&plot_flags, ANUSZKA_BROKE_OIL);  // communicate broken oil
@@ -1551,7 +1551,7 @@ void proceed_after_migration() {
        if(is_at_place(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor+1)
          pick_item(PERSON_ANIA, NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
      } else {
-       if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANIA+1)
+       if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANIA)
          drop_item(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
      }
   }
@@ -1562,7 +1562,7 @@ void proceed_after_migration() {
        if(is_at_place(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor+1)
          pick_item(PERSON_ANUSZKA, NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
      } else {
-       if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANUSZKA+1)
+       if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANUSZKA)
          drop_item(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
      }
   }
@@ -1597,7 +1597,7 @@ void proceed_after_migration() {
 
   if(smutni_target >= 0 &&  // smutni maja kogos na celowniku; szukaja kogos
      (is_at_place(PERSON_SMUTNI) == is_at_place(smutni_target)) &&
-     is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI+1) {  // smutni i ich target sa na tym samym pietrze
+     is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI) {  // smutni i ich target sa na tym samym pietrze
     hand_item_to_other_person(NUM_PERSONS + ITEM_WYROK, smutni_target);  // smutni dają nakaz targetowi
   }
 
