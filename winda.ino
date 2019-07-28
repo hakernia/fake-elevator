@@ -163,7 +163,7 @@ void clear_bit_flag(unsigned long *flags, char flag_num) {
   *flags &= ~(1UL << flag_num);
 }
 char is_bit_flag(unsigned long flags, char flag_num) {
-  return (flags >> flag_num) & 1UL;
+  return (flags << 31-flag_num) >> 31;  // (flags >> flag_num) & 1F;
 }
 char count_set_flags(unsigned long flags) {
   char flag_count = 0;
@@ -1127,9 +1127,9 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
 
   // wszyscy poza smutnymi mając nakaz wysiadają tylko na parterze
   if(person != PERSON_SMUTNI) {
-    if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person+1 ||
-       is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person+1 ||
-       is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person+1) {
+    if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person ||
+       is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person ||
+       is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person) {
         // ma doręczony nakaz, wyrok, wezwanie; wiec wysiada tylko na parterze
       if(curr_floor == PLACE_GROUND_FLOOR)
         return true;
@@ -1147,29 +1147,34 @@ char person_loc(char person) {
   return lift_obj[person];
 }
 
-void communicate_rejections() {
-  char rej_count = 0;
-  unsigned long rejected = rejected_person_flags;
-  char last_rej_person = -1;
-  for(char person = 0; person < 32; person++) {
-    if(rejected & 1) {
-      rej_count++;
-      if(rej_count == 1) {
-        add_spk(MSG_NIESTETY);
+// communicate_list(rejected_person_flags, MSG_NIESTETY, MSG_OFFS_PERSONS, MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
+
+void communicate_list(unsigned long list_flags,   // rejected_person_flags
+                      unsigned char msg_header,   // MSG_NIESTETY
+                      unsigned char msg_offs,     // MSG_OFFS_PERSONS
+                      unsigned char msg_info_signular,  // MSG_NIE_WPUSZCZONY
+                      unsigned char msg_info_plural) {  // MSG_NIE_WPUSZCZENI
+  char item_count = 0;
+  char last_item = -1;
+  for(char item = 0; item < 32; item++) {
+    if(list_flags & 1UL) {
+      item_count++;
+      if(item_count == 1) {
+        add_spk(msg_header);
       }
-      add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
-      last_rej_person = person;
+      add_spk(msg_offs + item * 4 + MIANOWNIK_UP);
+      last_item = item;
     }
-    rejected >>= 1;
+    list_flags >>= 1;
   }
-  if(rej_count == 0)
+  if(item_count == 0)
     return;
-  if(rej_count == 1)
-    add_spk(MSG_NIE_WPUSZCZONY);
+  if(item_count == 1)
+    add_spk(msg_info_signular);
   else {
     chg_spk(MSG_I + random(2));
-    add_spk(MSG_OFFS_PERSONS + last_rej_person * 4 + MIANOWNIK_UP);
-    add_spk(MSG_NIE_WPUSZCZENI);
+    add_spk(msg_offs + last_item * 4 + MIANOWNIK_UP);
+    add_spk(msg_info_plural);
   }
 
   if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
@@ -1180,33 +1185,25 @@ void communicate_rejections() {
     rozsadek_rzadu = 0;  // do not inform again
   }    
 }
+
+void communicate_rejections() {
+  communicate_list(rejected_person_flags, 
+                   MSG_NIESTETY, MSG_OFFS_PERSONS, 
+                   MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
+  
+  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
+    add_spk(MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA);
+  }
+  if(rozsadek_rzadu == 1) {
+    add_spk(MSG_DOBRA_ZMIANA_IGNOR_LIMITOW);
+    rozsadek_rzadu = 0;  // do not inform again
+  }    
+}
   
 void communicate_forced_exits() {
-  if(forced_ex_count == 0)
-    return;
-  char forced_ex_count = 0;
-  unsigned long forced = forced_exiting_flags;
-  char last_forced_person = -1;
-  for(char person = 0; person < 32; person++) {
-    if(forced & 1) {
-      forced_ex_count++;
-      if(forced_ex_count == 1) {
-        add_spk(MSG_NIESTETY);
-      }
-      add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
-      last_forced_person = person;
-    }
-    forced >>= 1;
-  }
-  if(forced_ex_count == 0)
-    return;
-  if(forced_ex_count == 1)
-    add_spk(MSG_MUSI_WYJSC);
-  else {
-    chg_spk(MSG_I + random(2));
-    add_spk(MSG_OFFS_PERSONS + last_forced_person * 4 + MIANOWNIK_UP);
-    add_spk(MSG_MUSZA_WYJSC);
-  }
+  communicate_list(rejected_person_flags, 
+                   MSG_NIESTETY, MSG_OFFS_PERSONS, 
+                   MSG_MUSI_WYJSC, MSG_MUSZA_WYJSC);
 }
 
 char want_to_enter(char person) {
