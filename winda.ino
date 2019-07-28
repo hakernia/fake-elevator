@@ -369,12 +369,14 @@ unsigned char map_key_to_sr[1][KEY_DIGIT_MAX - KEY_DIGIT_MIN + 1] =
 
 
 // manage key modes
-unsigned long modeset[NUM_KEY_MODES][5] =
-{{4, CRGB::Red, CRGB::Yellow, CRGB::Green, CRGB::Blue},   // func keys
- {2, CRGB::Black, CRGB::Yellow},              // switches
- {2, CRGB::Black, CRGB::Green},              // switches
- {2, CRGB::Black, CRGB::Blue},              // switches
- {1, CRGB::Black}};            // Floor STOP key
+//unsigned long key_bell_states[4] = {CRGB::Red, CRGB::Yellow, CRGB::Green, CRGB::Blue};
+char modeset_len[] = {4,2,2,2,1};
+CRGB modeset[NUM_KEY_MODES][5] =
+{{CRGB::Red, CRGB::Yellow, CRGB::Green, CRGB::Blue},   // func keys
+ {CRGB::Black, CRGB::Yellow},              // switches
+ {CRGB::Black, CRGB::Green},              // switches
+ {CRGB::Black, CRGB::Blue},              // switches
+ {CRGB::Black}};            // Floor STOP key
  
 #define KEY_MODE_FUNCKEYS      0
 #define KEY_MODE_SWITCHES_1    1
@@ -384,7 +386,7 @@ unsigned long modeset[NUM_KEY_MODES][5] =
 
 // set key to next color in given modeset
 void next_key_state(char key_num, char key_mode) {
-  if(key_state[key_mode][key_num] < modeset[key_mode][0]-1) 
+  if(key_state[key_mode][key_num] < modeset_len[key_mode]-1) 
     key_state[key_mode][key_num]++;
   else 
     key_state[key_mode][key_num] = 0;
@@ -517,12 +519,12 @@ void display_based_on_mode(char from_led, char to_led, char key_mode, char key_p
 
       if(key_num == KEY_BELL) {
         if(key_countdown[key_num] > 0)  // recently pressed
-          leds[map_key_to_led[key_num]] = modeset[key_mode][key_state[key_mode][key_num]+1];
+          leds[map_key_to_led[key_num]] = modeset[key_mode][key_state[key_mode][key_num]];
         else                            // idle for long time
           leds[map_key_to_led[key_num]] = CRGB::Black;
       }
       else
-        leds[map_key_to_led[key_num]] = modeset[key_mode][key_state[key_mode][key_num]+1];
+        leds[map_key_to_led[key_num]] = modeset[key_mode][key_state[key_mode][key_num]];
     }
 }
 /*
