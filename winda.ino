@@ -1038,12 +1038,12 @@ void clear_lift_world_queues() {
   rejected_person_flags = 0;
 }
 // checks if object idx is a person (and not an item)
-// return 0 or person_id + 1  (remember the 1!)
+// return -1 or person_id
 char is_person(char obj_idx) {  // obj_idx is an idx of lift_obj[]
   if(obj_idx < NUM_PERSONS)     // it is a person
-    return obj_idx + 1;  // obj_idx is incidentally a person id
+    return obj_idx;  // obj_idx is incidentally a person id
   else
-    return 0;
+    return -1;
   //return obj_id - NUM_FLOORS;
   /*
   if((lift_obj[obj_id] >> 6) == 0)
@@ -1318,8 +1318,8 @@ char communicate_person_owns(char person) {
 void communicate_possessions_in_cabin() {
   char person;
   for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
-    if((person = is_person(ff)) > 0) {
-      person--; // is_person() returns id+1, to use 0 as false
+    if((person = is_person(ff)) > -1) {
+      //person--; // is_person() returns id, to use -1 as false
       if(is_at_place(person) == (PLACE_CABIN)) {
         // person in cabin
         communicate_person_owns(person);
@@ -1416,8 +1416,8 @@ void migrate_objs() {
   char place;
   char other_person;
   for(char ff = 0; ff < NUM_PERSONS; ff++) {
-    if((person = is_person(ff)) > 0) {
-      person--; // is_person() returns id+1, to use 0 as false
+    if((person = is_person(ff)) > -1) {
+      //person--; // is_person() returns id, to use -1 as false
       if((place = is_at_place(person)) == (PLACE_CABIN)) {
         place--;
         // person in cabin
@@ -1443,8 +1443,8 @@ void migrate_objs() {
     }
   }
   for(char ff = 0; ff < NUM_PERSONS; ff++) {
-    if((person = is_person(ff)) > 0) {
-      person--; // is_person() returns id+1, to use 0 as false
+    if((person = is_person(ff)) > -1) {
+      //person--; // is_person() returns id, to use -1 as false
       if((place = is_at_place(person)) == (curr_floor)) {
         place--;
         // person not in cabin
@@ -1569,8 +1569,8 @@ void proceed_after_migration() {
 
   if(curr_floor == PLACE_MYSTERY_FLOOR)
   for(char ff = 0; ff < NUM_PERSONS; ff++) {
-    if((person = is_person(ff)) > 0) {
-      person--; // is_person() returns id+1, to use 0 as false
+    if((person = is_person(ff)) > -1) {
+      //person--; // is_person() returns id, to use -1 as false
       if((place = is_at_place(person)) == (PLACE_CABIN)) {
         place--;
         switch(person) {
@@ -1626,8 +1626,8 @@ void proceed_after_migration() {
   }
   
   for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
-    if((person = is_person(ff)) > 0) {
-      person--; // is_person() returns id+1, to use 0 as false
+    if((person = is_person(ff)) > -1) {
+      //person--; // is_person() returns id, to use -1 as false
       if((place = is_at_place(person)) == (PLACE_CABIN)) {
         place--;
         // person in cabin
