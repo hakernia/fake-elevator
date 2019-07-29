@@ -790,7 +790,7 @@ char lift_obj[NUM_PERSONS + NUM_ITEMS] =
   LVL_1 + 6,               // item 17 szkatulka is on 6th floor
   LVL_1 + 0,               // item 18 worek ziemniakow is on 0th floor
   LVL_1 + 8,               // item 19 zdjecie is on 8th floor
-  LVL_1 + NUM_FLOORS + PERSON_SMUTNI  // item 20 zegarek is on person smutni panowie
+  LVL_1 + 0                // item 20 wyrok(zegarek) is on ground floor
   // nakaz aresztowania
   // wezwanie
   // 
