@@ -628,6 +628,8 @@ unsigned char spk_que_len = 0;
 long spk_countdown = -1;
 
 void add_spk(int spk_num) {
+  if(spk_num < 0)
+    return;
   if(spk_que_len < MAX_SPK_QUEUE - 1) {
     spk_que[spk_que_len] = spk_num;
     spk_que_len++;
@@ -906,6 +908,70 @@ void remove_person(char person) {
 #define MSG_MUSI_WYJSC         228
 #define MSG_MUSZA_WYJSC        229 
 
+
+// communicate_list(rejected_person_flags, MSG_NIESTETY, MSG_OFFS_PERSONS, MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
+
+void communicate_list(unsigned long list_flags,      // rejected_person_flags
+                      unsigned char msg_head,        // MSG_NIESTETY, Z_WINDY_WYSIADA
+                      unsigned char msg_head_plural, // MSG_NIESTETY, Z_WINDY_WYSIADAJA
+                      unsigned char msg_offs,        // MSG_OFFS_PERSONS
+                      unsigned char msg_tail,        // MSG_NIE_WPUSZCZONY
+                      unsigned char msg_tail_plural) // MSG_NIE_WPUSZCZENI
+{
+  char item_count = count_set_flags(list_flags);
+
+  if(item_count == 1) {
+    add_spk(msg_head);
+    //add_spk(MSG_OFFS_PERSONS + exiting[0] * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(list_flags, 0) * 4 + MIANOWNIK_DOWN);
+    add_spk(msg_tail);
+  }
+  else {
+    add_spk(msg_head_plural);  // ++ -> plural
+    item_count--;         // count 1 less to treat the last item differently
+    for(ff=0; ff<item_count; ff++) {
+      add_spk(MSG_OFFS_PERSONS + next_set_flag(list_flags, ff) * 4 + MIANOWNIK_UP);
+    }
+    add_spk(MSG_I + random(2));
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(exiting_flags, ff) * 4 + MIANOWNIK_DOWN);
+    add_spk(msg_tail_plural);
+  }
+/*
+  
+  char last_item = -1;
+  for(char item = 0; item < 32; item++) {
+    if(list_flags & 1UL) {
+      item_count++;
+      if(item_count == 1) {
+        add_spk(msg_head);
+      }
+      add_spk(msg_offs + item * 4 + MIANOWNIK_UP);
+      last_item = item;
+    }
+    list_flags >>= 1;
+  }
+  if(item_count == 0)
+    return;
+  if(item_count == 1)
+    add_spk(msg_tail);
+  else {
+    chg_spk(MSG_I + random(2));
+    add_spk(msg_offs + last_item * 4 + MIANOWNIK_UP);
+    add_spk(++msg_tail);  // ++ -> plural
+  }
+
+  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
+    add_spk(MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA);
+  }
+  if(rozsadek_rzadu == 1) {
+    add_spk(MSG_DOBRA_ZMIANA_IGNOR_LIMITOW);
+    rozsadek_rzadu = 0;  // do not inform again
+  }    
+*/
+}
+
+
+
 void communicate_exits() {
   char ff;
   if(hospitalized_person > -1) {
@@ -916,6 +982,9 @@ void communicate_exits() {
     add_spk(MSG_WYPROWADZAJA);
     add_spk(MSG_OFFS_PERSONS + removed_person * 4 + BIERNIK_PERSONS);
   }
+
+  communicate_list(exiting_flags, MSG_Z_WINDY_WYSIADA, MSG_Z_WINDY_WYSIADAJA, MSG_OFFS_PERSONS, -1, -1); // persons, head, head plural, pers offset, tail, tail plural
+/*
   if(ex_count == 0)
     return;
   if(ex_count == 1) {
@@ -933,6 +1002,7 @@ void communicate_exits() {
     //add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_DOWN);
     add_spk(MSG_OFFS_PERSONS + next_set_flag(exiting_flags, ff) * 4 + MIANOWNIK_DOWN);
   }
+*/
 }
 //char entering[NUM_PERSONS];
 char ent_count;
@@ -947,6 +1017,9 @@ void enter_lift(char person) {
   people_on_board++;
 }
 void communicate_entries() {
+
+  communicate_list(entering_flags, MSG_WSIADA, MSG_WSIADAJA, MSG_OFFS_PERSONS, -1, -1); // persons, head, head plural, pers offset, tail, tail plural
+/*
   char ff;
   if(ent_count == 0)
     return;
@@ -965,6 +1038,7 @@ void communicate_entries() {
     //add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_DOWN);
     add_spk(MSG_OFFS_PERSONS + next_set_flag(entering_flags, ff) * 4 + MIANOWNIK_DOWN);
   }
+*/
 }
 
 
@@ -1158,48 +1232,10 @@ char person_loc(char person) {
   return lift_obj[person];
 }
 
-// communicate_list(rejected_person_flags, MSG_NIESTETY, MSG_OFFS_PERSONS, MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
-
-void communicate_list(unsigned long list_flags,   // rejected_person_flags
-                      unsigned char msg_header,   // MSG_NIESTETY
-                      unsigned char msg_offs,     // MSG_OFFS_PERSONS
-                      unsigned char msg_info_signular,  // MSG_NIE_WPUSZCZONY
-                      unsigned char msg_info_plural) {  // MSG_NIE_WPUSZCZENI
-  char item_count = 0;
-  char last_item = -1;
-  for(char item = 0; item < 32; item++) {
-    if(list_flags & 1UL) {
-      item_count++;
-      if(item_count == 1) {
-        add_spk(msg_header);
-      }
-      add_spk(msg_offs + item * 4 + MIANOWNIK_UP);
-      last_item = item;
-    }
-    list_flags >>= 1;
-  }
-  if(item_count == 0)
-    return;
-  if(item_count == 1)
-    add_spk(msg_info_signular);
-  else {
-    chg_spk(MSG_I + random(2));
-    add_spk(msg_offs + last_item * 4 + MIANOWNIK_UP);
-    add_spk(msg_info_plural);
-  }
-
-  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
-    add_spk(MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA);
-  }
-  if(rozsadek_rzadu == 1) {
-    add_spk(MSG_DOBRA_ZMIANA_IGNOR_LIMITOW);
-    rozsadek_rzadu = 0;  // do not inform again
-  }    
-}
-
 void communicate_rejections() {
   communicate_list(rejected_person_flags, 
-                   MSG_NIESTETY, MSG_OFFS_PERSONS, 
+                   MSG_NIESTETY, MSG_NIESTETY,
+                   MSG_OFFS_PERSONS, 
                    MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
   
   if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
@@ -1213,7 +1249,8 @@ void communicate_rejections() {
   
 void communicate_forced_exits() {
   communicate_list(rejected_person_flags, 
-                   MSG_NIESTETY, MSG_OFFS_PERSONS, 
+                   MSG_NIESTETY, MSG_NIESTETY,
+                   MSG_OFFS_PERSONS, 
                    MSG_MUSI_WYJSC, MSG_MUSZA_WYJSC);
 }
 
