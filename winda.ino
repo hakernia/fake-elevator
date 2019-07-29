@@ -912,11 +912,11 @@ void remove_person(char person) {
 // communicate_list(rejected_person_flags, MSG_NIESTETY, MSG_OFFS_PERSONS, MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
 
 void communicate_list(unsigned long list_flags,      // rejected_person_flags
-                      unsigned char msg_head,        // MSG_NIESTETY, Z_WINDY_WYSIADA
-                      unsigned char msg_head_plural, // MSG_NIESTETY, Z_WINDY_WYSIADAJA
-                      unsigned char msg_offs,        // MSG_OFFS_PERSONS
-                      unsigned char msg_tail,        // MSG_NIE_WPUSZCZONY
-                      unsigned char msg_tail_plural) // MSG_NIE_WPUSZCZENI
+                      int msg_head,        // MSG_NIESTETY, Z_WINDY_WYSIADA
+                      int msg_head_plural, // MSG_NIESTETY, Z_WINDY_WYSIADAJA
+                      int msg_offs,        // MSG_OFFS_PERSONS
+                      int msg_tail,        // MSG_NIE_WPUSZCZONY
+                      int msg_tail_plural) // MSG_NIE_WPUSZCZENI
 {
   char item_count = count_set_flags(list_flags);
 
