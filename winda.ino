@@ -372,8 +372,8 @@ unsigned char map_key_to_sr[1][KEY_DIGIT_MAX - KEY_DIGIT_MIN + 1] =
 //unsigned long key_bell_states[4] = {CRGB::Red, CRGB::Yellow, CRGB::Green, CRGB::Blue};
 char modeset_len[] = {4,2,2,2,1};
 CRGB modeset[NUM_KEY_MODES][5] =
-{{CRGB::Red, CRGB::Yellow, CRGB::Green, CRGB::Blue},   // func keys
- {CRGB::Black, CRGB::Yellow},              // switches
+{{CRGB::Red, 0x888800, CRGB::Green, CRGB::Blue},   // func keys
+ {CRGB::Black, 0x888800},              // switches
  {CRGB::Black, CRGB::Green},              // switches
  {CRGB::Black, CRGB::Blue},              // switches
  {CRGB::Black}};            // Floor STOP key
@@ -853,11 +853,11 @@ char is_guilty(char person) {
   return 0;
 }
 void remove_person(char person) {
+  drop_items(person);
   lift_obj[person] = -2;
   removed_person = person;
   people_on_board--;
   smutni_target = -1;
-  drop_items(person);
 }
 
 
@@ -919,11 +919,12 @@ void communicate_list(unsigned long list_flags,      // rejected_person_flags
                       int msg_tail_plural) // MSG_NIE_WPUSZCZENI
 {
   char item_count = count_set_flags(list_flags);
-
+  if(item_count == 0)
+    return;
   if(item_count == 1) {
     add_spk(msg_head);
     //add_spk(MSG_OFFS_PERSONS + exiting[0] * 4 + MIANOWNIK_DOWN);
-    add_spk(MSG_OFFS_PERSONS + next_set_flag(list_flags, 0) * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(list_flags, 0) * 4 + (msg_tail < 0 ? MIANOWNIK_DOWN : MIANOWNIK_UP));
     add_spk(msg_tail);
   }
   else {
@@ -933,7 +934,7 @@ void communicate_list(unsigned long list_flags,      // rejected_person_flags
       add_spk(MSG_OFFS_PERSONS + next_set_flag(list_flags, ff) * 4 + MIANOWNIK_UP);
     }
     add_spk(MSG_I + random(2));
-    add_spk(MSG_OFFS_PERSONS + next_set_flag(exiting_flags, ff) * 4 + MIANOWNIK_DOWN);
+    add_spk(MSG_OFFS_PERSONS + next_set_flag(list_flags, ff) * 4 + (msg_tail_plural < 0 ? MIANOWNIK_DOWN : MIANOWNIK_UP));
     add_spk(msg_tail_plural);
   }
 /*
@@ -1124,7 +1125,7 @@ void clear_lift_world_queues() {
 }
 // checks if object idx is a person (and not an item)
 // return -1 or person_id
-char is_person(char obj_idx) {  // obj_idx is an idx of lift_obj[]
+char is_person(char obj_idx) {  // obj_idx is an idx of lift_obj[] (0=first person)
   if(obj_idx < NUM_PERSONS)     // it is a person
     return obj_idx;  // obj_idx is incidentally a person id
   else
@@ -1248,7 +1249,7 @@ void communicate_rejections() {
 }
   
 void communicate_forced_exits() {
-  communicate_list(rejected_person_flags, 
+  communicate_list(forced_exiting_flags, 
                    MSG_NIESTETY, MSG_NIESTETY,
                    MSG_OFFS_PERSONS, 
                    MSG_MUSI_WYJSC, MSG_MUSZA_WYJSC);
@@ -1368,7 +1369,7 @@ void communicate_possessions_in_cabin() {
   for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
     if((person = is_person(ff)) > -1) {
       //person--; // is_person() returns id, to use -1 as false
-      if(is_at_place(person) == (PLACE_CABIN)) {
+      if(is_at_place(person) == PLACE_CABIN) {
         // person in cabin
         communicate_person_owns(person);
       }
@@ -1619,8 +1620,8 @@ void proceed_after_migration() {
   for(char ff = 0; ff < NUM_PERSONS; ff++) {
     if((person = is_person(ff)) > -1) {
       //person--; // is_person() returns id, to use -1 as false
-      if((place = is_at_place(person)) == (PLACE_CABIN)) {
-        place--;
+      if((is_at_place(person)) == PLACE_CABIN) {
+        //place--;
         switch(person) {
           case PERSON_ANUSZKA:
           case PERSON_WOLAND:
