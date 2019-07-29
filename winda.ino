@@ -722,7 +722,18 @@ unsigned long rejected_person_flags = 0;
 unsigned long targeted_person_flags = 0;
 
 
-
+/*
+ * Floors are not stored in lift_obj. They are values in persons and items.
+ * lift_obj[0..NUM_PERSONS-1] - value is location of person
+ * lift_obj[NUM_PERSONS..NUM_PERSONS+NUM_ITEMS-1] - value is description and location of item:
+ *   0x11000000 - description
+ *   0x00111111 - location
+ *     location value ranges:
+ *                          0..NUM_FLOORS-1                       - a floor: 0-ground, 1..10-floors, 11-mystery floor, 12-cabin
+ *                 NUM_FLOORS..NUM_FLOORS+NUM_PERSONS-1           - a person
+ *     NUM_FLOORS+NUM_PERSONS..NUM_FLOORS_NUM_PERSONS+NUM_ITEMS-1 - an item
+ * 
+ */
 // who/what is where
 char lift_obj[NUM_PERSONS + NUM_ITEMS] = 
 {
@@ -786,7 +797,7 @@ char people_on_board;
 char max_people_on_board;
 char hospitalized_person;
 char removed_person = -1;
-char rozsadek_rzadu = 3;   // !!! make it bigger; declines with rejections of smutni
+char rozsadek_rzadu = 3;   // !!! make it bigger?; declines with rejections of smutni
 char smutni_target = -1;   // noone on target
 
 //char exiting[NUM_PERSONS];
@@ -975,9 +986,9 @@ char drop_count;
 // have person drop item to the place the person is in and register the action
 void drop_item(char item_idx) {
   // assume it's never called if item is not on person
-  char person_holding_item = (lift_obj[item_idx] & 0x3F) - NUM_FLOORS;
-  char person_location = (lift_obj[ person_holding_item ] & 0x3F);
-  char item_desc = (lift_obj[item_idx] & 0xC0);
+  char person_holding_item = (lift_obj[item_idx] & 0x3F) - NUM_FLOORS; // 0x 0011 1111
+  char person_location = (lift_obj[ person_holding_item ] & 0x3F);     // 0x 0011 1111
+  char item_desc = (lift_obj[item_idx] & 0xC0);                        // 0x 1100 0000
   lift_obj[item_idx] = item_desc + person_location;  // move the item to floor idx
   // register action for further communication
   dropping[drop_count] = person_holding_item;
