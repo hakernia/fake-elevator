@@ -770,27 +770,27 @@ char lift_obj[NUM_PERSONS + NUM_ITEMS] =
   11,                        // person 27 Kot Behemot
   11,                        // person 28 Woland
   // items
-  LVL_1 + 0,               // item 0 olej slonecznikowy is on 0th floor
-  LVL_1 + NUM_FLOORS + 1,  // item 1 dlugopis is on person 1 Gosia
-  LVL_1 + NUM_FLOORS + NUM_PERSONS + 5,  // item 2 rekopis is on item 5 kartka
-  LVL_2 + NUM_FLOORS + NUM_PERSONS + 18, // item 3 frytki is on item 18 worek ziemniakow
-  LVL_1 + 0,               // item 4 gwozdz is on ground floor
-  LVL_1 + NUM_FLOORS + 1,  // item 5 kartka is on person 1 Gosia
-  LVL_1 + NUM_FLOORS + NUM_PERSONS + 17,  // item 6 konstytucja is on item 17 szkatulka
-  LVL_1 + NUM_FLOORS + 5,  // item 7 klucz is on 5th person Julia
-  LVL_1 + NUM_FLOORS + NUM_PERSONS + 11, // item 8 kwiat is in item 11 nasionko
-  LVL_1 + NUM_FLOORS + 2,  // item 9 list is on 2nd person
-  LVL_1 + NUM_FLOORS + 5,  // item 10 mlotek is on person 5 Julia
-  LVL_1 + 0,               // item 11 nasionko is on ground_floor
-  LVL_1 + 1,               // item 12 noz is on 1st floor
-  LVL_1 + 2,               // item 13 okulary is on 2nd floor
-  LVL_1 + 3,               // item 14 pierscionek is on 3rd floor
-  LVL_1 + NUM_FLOORS + 4,  // item 15 przepis na piwo is on person 4 Jozef
-  LVL_1 + 5,               // item 16 ramka is on 5th floor
-  LVL_1 + 6,               // item 17 szkatulka is on 6th floor
-  LVL_1 + 0,               // item 18 worek ziemniakow is on 0th floor
-  LVL_1 + 8,               // item 19 zdjecie is on 8th floor
-  LVL_1 + 0                // item 20 wyrok(zegarek) is on ground floor
+  0,               // item 0 olej slonecznikowy is on 0th floor
+  NUM_FLOORS + 1,  // item 1 dlugopis is on person 1 Gosia
+  NUM_FLOORS + NUM_PERSONS + 5,  // item 2 rekopis is on item 5 kartka
+  NUM_FLOORS + NUM_PERSONS + 18, // item 3 frytki is on item 18 worek ziemniakow
+  0,               // item 4 gwozdz is on ground floor
+  NUM_FLOORS + 1,  // item 5 kartka is on person 1 Gosia
+  NUM_FLOORS + NUM_PERSONS + 17,  // item 6 konstytucja is on item 17 szkatulka
+  NUM_FLOORS + 5,  // item 7 klucz is on 5th person Julia
+  NUM_FLOORS + NUM_PERSONS + 11, // item 8 kwiat is in item 11 nasionko
+  NUM_FLOORS + 2,  // item 9 list is on 2nd person
+  NUM_FLOORS + 5,  // item 10 mlotek is on person 5 Julia
+  0,               // item 11 nasionko is on ground_floor
+  1,               // item 12 noz is on 1st floor
+  2,               // item 13 okulary is on 2nd floor
+  3,               // item 14 pierscionek is on 3rd floor
+  NUM_FLOORS + 4,  // item 15 przepis na piwo is on person 4 Jozef
+  5,               // item 16 ramka is on 5th floor
+  6,               // item 17 szkatulka is on 6th floor
+  0,               // item 18 worek ziemniakow is on 0th floor
+  8,               // item 19 zdjecie is on 8th floor
+  0                // item 20 wyrok(zegarek) is on ground floor
   // nakaz aresztowania
   // wezwanie
   // 
@@ -830,10 +830,9 @@ void move_person_by_stairs(char person, char to_floor) {
 }
 void move_item_floor_to_floor(char item, char to_floor) {
   // ignore if item is in cabin or on person
-  if((lift_obj[NUM_PERSONS + item] & 0x3F) >= PLACE_CABIN)
+  if(lift_obj[NUM_PERSONS + item] >= PLACE_CABIN)
     return;
-  lift_obj[NUM_PERSONS + item] = 
-    (lift_obj[NUM_PERSONS + item] & 0xC0) + to_floor;
+  lift_obj[NUM_PERSONS + item] = to_floor;
 }
 
 // uses curr_floor
@@ -1048,8 +1047,7 @@ char picked[NUM_ITEMS];
 char pick_count;
 // have person take item from place where she stands
 void pick_item(char person, char item_idx) {
-  char item_desc = (lift_obj[item_idx] & 0xC0);
-  lift_obj[item_idx] = NUM_FLOORS + item_desc + person;   // move the item to person (person 0 idx in lift_obj[] == NUM_FLOORS)
+  lift_obj[item_idx] = NUM_FLOORS + person;   // move the item to person (person 0 idx in lift_obj[] == NUM_FLOORS)
   // register action for further communication
   picking[pick_count] = person;
   picked[pick_count] = item_idx;
@@ -1061,10 +1059,9 @@ char drop_count;
 // have person drop item to the place the person is in and register the action
 void drop_item(char item_idx) {
   // assume it's never called if item is not on person
-  char person_holding_item = (lift_obj[item_idx] & 0x3F) - NUM_FLOORS; // 0x 0011 1111
-  char person_location = (lift_obj[ person_holding_item ] & 0x3F);     // 0x 0011 1111
-  char item_desc = (lift_obj[item_idx] & 0xC0);                        // 0x 1100 0000
-  lift_obj[item_idx] = item_desc + person_location;  // move the item to floor idx
+  char person_holding_item = lift_obj[item_idx] - NUM_FLOORS;          // 0x 0111 1111
+  char person_location = lift_obj[ person_holding_item ];              // 0x 0111 1111 - person locations are -1..NUM_PLACES-1; do not && ox3F!
+  lift_obj[item_idx] = person_location;  // move the item to floor idx
   // register action for further communication
   dropping[drop_count] = person_holding_item;
   dropped[drop_count] = item_idx;
@@ -1082,9 +1079,8 @@ char receiver[NUM_ITEMS]; // osoba która dostaje
 char hand_count;
 char hand_item_to_other_person(char item_idx, char other_person) {
   // assume it's never called if item is not on person
-  char person_holding_item = (lift_obj[item_idx] & 0x3F) - NUM_FLOORS;
-  char item_desc = (lift_obj[ item_idx ] & 0xC0);
-  lift_obj[item_idx] = NUM_FLOORS + item_desc + other_person;   // move the item to person
+  char person_holding_item = lift_obj[item_idx] - NUM_FLOORS;
+  lift_obj[item_idx] = NUM_FLOORS + other_person;   // move the item to person
   // register action for further communication
   handing[hand_count] = person_holding_item;
   handed[hand_count] = item_idx - NUM_PERSONS;
@@ -1149,7 +1145,7 @@ char is_place(char location) {
 // checks if object(item) idx is located on person (owned by it) or not
 // return -1 or person_id
 char is_item_on_person(char obj_idx) {
-  char location_id = (lift_obj[obj_idx] & 0x3F);
+  char location_id = lift_obj[obj_idx];
   if(location_id < NUM_FLOORS)                  // it is on floor
     return -1;
   if(location_id >= NUM_FLOORS + NUM_PERSONS)   // it is on other item
@@ -1159,7 +1155,7 @@ char is_item_on_person(char obj_idx) {
 char is_at_place(char obj_idx) {
   if(obj_idx < 0)
     return -1;
-  char location = (lift_obj[obj_idx] & 0x3F);
+  char location = lift_obj[obj_idx];
   return is_place(location);  // is_place() returns place_id, or -1
 }
 
@@ -1324,12 +1320,12 @@ char want_to_enter(char person) {
 
 
 char are_other_persons_here(char obj_idx) {  // obj_id - we expect index in lift_obj[] here
-  char object_location = (lift_obj[obj_idx] & 0x3F);
+  char object_location = lift_obj[obj_idx];
   char other_person = 0;
   // loop all people and get the last being at the same place
   for(char possible_neighbor = 0; possible_neighbor < NUM_PERSONS; possible_neighbor++) {
     if(possible_neighbor != obj_idx) { // skip given object
-      if((lift_obj[possible_neighbor] & 0x3F) == object_location)
+      if(lift_obj[possible_neighbor] == object_location)
         other_person = possible_neighbor;
     }
   }
@@ -1645,8 +1641,8 @@ void proceed_after_migration() {
   }
 
   if(smutni_target >= 0 &&  // smutni maja kogos na celowniku; szukaja kogos
-     (is_at_place(PERSON_SMUTNI) == is_at_place(smutni_target)) &&
-     is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI) {  // smutni i ich target sa na tym samym pietrze
+     (is_at_place(PERSON_SMUTNI) == is_at_place(smutni_target)) &&    // smutni i ich target sa na tym samym pietrze
+     is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI) {  // smutni mają przy sobie wyrok
     hand_item_to_other_person(NUM_PERSONS + ITEM_WYROK, smutni_target);  // smutni dają nakaz targetowi
   }
 
@@ -1657,9 +1653,9 @@ void proceed_after_migration() {
      curr_floor == PLACE_GROUND_FLOOR &&        // jestesmy na parterze
      smutni_target == -1 &&                     // smutni nie maja w tej chwili targetu
      is_at_place(NUM_PERSONS + ITEM_WYROK) == PLACE_GROUND_FLOOR) {  // wyrok mozna podniesc na parterze
-    smutni_target = get_next_target();
-    pick_item(PERSON_SMUTNI, ITEM_WYROK);
-    lift_obj[PERSON_SMUTNI] = 0;
+    smutni_target = get_next_target();          // smutni dostają target do schwytania
+    pick_item(PERSON_SMUTNI, NUM_PERSONS + ITEM_WYROK);       // smutni podnoszą wyrok
+    lift_obj[PERSON_SMUTNI] = PLACE_GROUND_FLOOR;             // smutni wracają na parter, nawet jeśli byli poza budynkiem
   }
 
 /*
