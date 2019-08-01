@@ -905,7 +905,8 @@ void remove_person(char person) {
 #define MSG_SMUTNI_CHCA_ZNALEZC 99
 
 #define MSG_MUSI_WYJSC         228
-#define MSG_MUSZA_WYJSC        229 
+#define MSG_MUSZA_WYJSC        229
+#define MSG_NA                 230  // for repoorting "na kogo"
 
 
 // communicate_list(rejected_person_flags, MSG_NIESTETY, MSG_OFFS_PERSONS, MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
@@ -1351,6 +1352,11 @@ char communicate_person_owns(char person) {
       own_count++;
       item = ff - NUM_PERSONS;
       add_spk(MSG_OFFS_ITEMS + item * 4 + BIERNIK_UP_ITEMS);  // item name
+      // na kogo ten wyrok
+      if(item == ITEM_WYROK) {
+        add_spk(MSG_NA);
+        add_spk(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
+      }
     }
   }
   if(own_count == 1) {
@@ -1632,7 +1638,7 @@ void proceed_after_migration() {
     }
   }
 
-  // smutni sie skarza centrali
+  // smutni sie skarza centrali jesli maja wyrok a nie moga wejsc do windy
   if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI) && is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI) {
     if(rozsadek_rzadu > 0)
       rozsadek_rzadu--;
