@@ -1633,7 +1633,7 @@ void proceed_after_migration() {
   }
 
   // smutni sie skarza centrali
-  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
+  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI) && is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI) {
     if(rozsadek_rzadu > 0)
       rozsadek_rzadu--;
     if(rozsadek_rzadu == 1)
