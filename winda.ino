@@ -798,7 +798,7 @@ char lift_obj[NUM_PERSONS + NUM_ITEMS] =
 char people_on_board;
 char max_people_on_board;
 char hospitalized_person;
-char removed_person = -1;
+char removed_person;
 char rozsadek_rzadu = 3;   // !!! make it bigger?; declines with rejections of smutni
 char smutni_target = -1;   // noone on target
 
@@ -1476,7 +1476,7 @@ void migrate_objs() {
           hospitalize(person);  // it also changes hospitalized_person to person id
         }
         else
-        if(curr_floor == PLACE_GROUND_FLOOR && is_guilty(person)) {
+        if(curr_floor == PLACE_GROUND_FLOOR && is_guilty(person) && smutni_target == person) {
           remove_person(person);
         }
         else
