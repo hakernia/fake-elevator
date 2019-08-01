@@ -599,7 +599,9 @@ unsigned char spk_len[MAX_SPK] = {
                                                   13, 13, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5,
   35, // 228 musi wyjsc z windy
   35, // 229 musza wyjsc z windy
-  5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+  3,  // 230 na
+  70,  // 231 Woland intro
+  5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
   7, 7, 8, 8, // 300-303 Olej slonecznikowy
@@ -714,6 +716,7 @@ char person_spy = PERSON_SPY;
 #define ANUSZKA_BROKE_OIL         1
 #define ANUSZKA_BROKE_OIL_SILENT  2
 #define LIMITS_APPLY_FLAG         3   // people dont go overboard
+#define WOLAND_INTRO_DONE         4   // was woland introduced?
 //char alt_floor_announcements = 0;
 //char anuszka_broke_oil = 0;
 
@@ -907,7 +910,7 @@ void remove_person(char person) {
 #define MSG_MUSI_WYJSC         228
 #define MSG_MUSZA_WYJSC        229
 #define MSG_NA                 230  // for repoorting "na kogo"
-
+#define MSG_WOLAND_INTRO       231
 
 // communicate_list(rejected_person_flags, MSG_NIESTETY, MSG_OFFS_PERSONS, MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
 
@@ -1018,8 +1021,11 @@ void enter_lift(char person) {
   people_on_board++;
 }
 void communicate_entries() {
-
   communicate_list(entering_flags, MSG_WSIADA, MSG_WSIADAJA, MSG_OFFS_PERSONS, -1, -1); // persons, head, head plural, pers offset, tail, tail plural
+  if(is_bit_flag(entering_flags, PERSON_WOLAND) && !is_bit_flag(plot_flags, WOLAND_INTRO_DONE)) {
+    add_spk(MSG_WOLAND_INTRO);
+    set_bit_flag(&plot_flags, WOLAND_INTRO_DONE);
+  }
 /*
   char ff;
   if(ent_count == 0)
