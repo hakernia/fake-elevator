@@ -566,7 +566,8 @@ unsigned char spk_len[MAX_SPK] = {
   35, // 95 dobra zmiana ignor limitow
   6, // 96 niestety
   6, // 97 wyprowadzaja
-  5, 5,
+  5, // 98 dorecza
+  5, // 99 smutni usiluja namierzyc
   5, 5, 5, 5, // 100-103 Ania
   6, 6, 5, 5, // 104-107 Gosia
   4, 4, 5, 4, // 108-111 Rysiu
@@ -599,7 +600,7 @@ unsigned char spk_len[MAX_SPK] = {
                                                   13, 13, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5,
   35, // 228 musi wyjsc z windy
   35, // 229 musza wyjsc z windy
-  3,  // 230 na
+  4,  // 230 na
   70,  // 231 Woland intro
   5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
@@ -909,7 +910,7 @@ void remove_person(char person) {
 
 #define MSG_MUSI_WYJSC         228
 #define MSG_MUSZA_WYJSC        229
-#define MSG_NA                 230  // for repoorting "na kogo"
+#define MSG_NA                 230  // for reporting "na kogo"
 #define MSG_WOLAND_INTRO       231
 
 // communicate_list(rejected_person_flags, MSG_NIESTETY, MSG_OFFS_PERSONS, MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
@@ -1261,7 +1262,7 @@ void communicate_forced_exits() {
 char want_to_enter(char person) {
   // assumption: person is on the curr_floor
   if(people_on_board >= max_people_on_board && is_bit_flag(plot_flags, LIMITS_APPLY_FLAG) &&
-     person != PERSON_SREBRNY) {
+     person < PERSON_SREBRNY) {  // hack: excludes also PERSON_WOLAND, ANUSZKA, MALGORZATA, BEHEMOT
     set_bit_flag(&unhappy_person_flags, person);
     set_bit_flag(&rejected_person_flags, person);
     return false;
@@ -1396,9 +1397,10 @@ void communicate_possessions_entered_to_cabin() {
 // comunicate target of smutni if they have just entered the lift
 void communicate_target_of_entering_smutni() {
   if(is_bit_flag(entering_flags, PERSON_SMUTNI)) {
-    if(smutni_target > -1)
+    if(smutni_target > -1) {
       add_spk(MSG_SMUTNI_CHCA_ZNALEZC);
       add_spk(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
+    }
   }
 }
 
@@ -1644,8 +1646,8 @@ void proceed_after_migration() {
     }
   }
 
-  // smutni sie skarza centrali jesli maja wyrok a nie moga wejsc do windy
-  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI) && is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI) {
+  // smutni sie skarza centrali jesli maja na kogos wyrok a nie moga wejsc do windy
+  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) { // && is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI) {
     if(rozsadek_rzadu > 0)
       rozsadek_rzadu--;
     if(rozsadek_rzadu == 1)
