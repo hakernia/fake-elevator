@@ -565,7 +565,7 @@ unsigned char spk_len[MAX_SPK] = {
   26, // 94 smutni raportuja utrudnienia
   35, // 95 dobra zmiana ignor limitow
   6, // 96 niestety
-  6, // 97 wyprowadzaja
+  7, // 97 wyprowadzaja
   5, // 98 dorecza
   5, // 99 smutni usiluja namierzyc
   5, 5, 5, 5, // 100-103 Ania
@@ -602,27 +602,32 @@ unsigned char spk_len[MAX_SPK] = {
   35, // 229 musza wyjsc z windy
   4,  // 230 na
   70,  // 231 Woland intro
-  5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+  6,  // 232 zostawia
+  5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5,
-  7, 7, 8, 8, // 300-303 Olej slonecznikowy
-  5, 5, 5, 5, // 304-307 Dlugopis
-  5, 5, 5, 5, // 308-311 Rekopis
-  4, 4, 4, 4, // 312-315 Frytki 
-  4, 4, 4, 4, // 316-319 Gwozdz
-  4, 4, 4, 4, // 320-323 Kartka
-  5, 5, 5, 5, //
-  5, 5, 5, 5, // 328-331 Klucz
-  5, 5, 5, 5, // 332-335 Kwiat
-  3, 3, 3, 3, // 336-339 List
-  4, 4, 4, 4, // 340-343 Mlotek
-  5, 5, 5, 5, // 344-347 Nasionko
-  5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
-  8, 8, 8, 8, // 360-363 przepis na piwo
-  5, 5, 5, 5, 
-  5, 5, 5, 5, 
-  6, 6, 6, 6, // Worek ziemniakow
-  5, 5, 5, 5,   5, 5, 5, 5, 5, 5, 5, 5, 5, 5, 
+  7, 7, 8, 8, // ITEM  0  300-303 Olej slonecznikowy
+  5, 5, 5, 5, // ITEM  1  304-307 Dlugopis
+  5, 5, 5, 5, // ITEM  2  308-311 Rekopis
+  4, 4, 4, 4, // ITEM  3  312-315 Frytki 
+  4, 4, 4, 4, // ITEM  4  316-319 Gwozdz
+  4, 4, 4, 4, // ITEM  5  320-323 Kartka
+  5, 5, 5, 5, // ITEM  6
+  5, 5, 5, 5, // ITEM  7  328-331 Klucz
+  5, 5, 5, 5, // ITEM  8  332-335 Kwiat
+  3, 3, 3, 3, // ITEM  9  336-339 List
+  4, 4, 4, 4, // ITEM 10  340-343 Mlotek
+  5, 5, 5, 5, // ITEM 11  344-347 Nasionko
+  5, 5, 5, 5, // ITEM 12  
+  5, 5, 5, 5, // ITEM 13  
+  5, 5, 5, 5, // ITEM 14  
+  8, 8, 8, 8, // ITEM 15  360-363 przepis na piwo
+  5, 5, 5, 5, // ITEM 16  364-367 
+  5, 5, 5, 5, // ITEM 17  368-371 
+  6, 6, 6, 6, // ITEM 18  372-375 Worek ziemniakow
+  5, 5, 5, 5, // ITEM 19  376-379 
+  5, 5, 5, 5, // ITEM 20  380-383 ITEM_WYROK wyrok (zegarek)
+  5, 5, 5, 5, 5, 5, 
   5, 5, 5, 5, 5, 5, 5, 5, 5, 5
   };  // 5 = 500 ms
 #define MAX_SPK_QUEUE 30
@@ -648,8 +653,7 @@ void say_num(long num) {
   char buf[15];
   sprintf(buf, "%ld", num);
   for(char ff=0; ff<strlen(buf); ff++) {
-    wtv020sd16p.asyncPlayVoice(buf[ff] - '0' + 10);
-    delay(1000);
+    add_spk(buf[ff] - '0');
   }
 }
 void spk_que_tick() {
@@ -725,7 +729,7 @@ unsigned long plot_flags = 0;
 unsigned long nuts_person_flags = 0;
 unsigned long unhappy_person_flags = 0;
 unsigned long rejected_person_flags = 0;
-unsigned long targeted_person_flags = 0;
+unsigned long targeted_person_flags = 22;  // DEBUG!!! 0;
 
 
 /*
@@ -767,7 +771,7 @@ char lift_obj[NUM_PERSONS + NUM_ITEMS] =
   6,                         // person 20 Asia
   10,                        // person 21 Majka
      1,                         // person 22 Ela
-  0,                        // person 23 Grupa smutnych panow
+   9,                        // person 23 Grupa smutnych panow
   10,                        // person 24 Srebrny deweloper
   11,                        // person 25 Anuszka
   11,                        // person 26 Malgorzata
@@ -856,7 +860,9 @@ char is_guilty(char person) {
   return 0;
 }
 void remove_person(char person) {
-  drop_items(person);
+  //drop_items(person);  // let she drop ITEM_WYROK only
+  //drop_item(NUM_PERSONS + ITEM_WYROK);
+  lift_obj[NUM_PERSONS + ITEM_WYROK] = 0;
   lift_obj[person] = -2;
   removed_person = person;
   people_on_board--;
@@ -912,6 +918,7 @@ void remove_person(char person) {
 #define MSG_MUSZA_WYJSC        229
 #define MSG_NA                 230  // for reporting "na kogo"
 #define MSG_WOLAND_INTRO       231
+#define MSG_DROPPING            98 // DEBUG!!!, docelowo ma byc 232
 
 // communicate_list(rejected_person_flags, MSG_NIESTETY, MSG_OFFS_PERSONS, MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
 
@@ -986,6 +993,7 @@ void communicate_exits() {
   if(removed_person > -1) {
     add_spk(MSG_WYPROWADZAJA);
     add_spk(MSG_OFFS_PERSONS + removed_person * 4 + BIERNIK_PERSONS);
+//    communicate_dropped(removed_person);  // the person drops whatever it had
   }
 
   communicate_list(exiting_flags, MSG_Z_WINDY_WYSIADA, MSG_Z_WINDY_WYSIADAJA, MSG_OFFS_PERSONS, -1, -1); // persons, head, head plural, pers offset, tail, tail plural
@@ -1081,6 +1089,35 @@ void drop_items(char person) {
       drop_item(ff);
   }
 }
+void communicate_dropped(char person) {
+  char person_drop_count = 0;
+  char biernik = BIERNIK_UP_ITEMS;
+  // count drops of this person
+  for(char ff=0; ff < drop_count; ff++) {
+    if(dropping[ff] == person) {
+      person_drop_count++;
+    }
+  }
+  // say header if drops exist
+  if(person_drop_count) {
+    add_spk(MSG_OFFS_PERSONS + dropping[ff] * 4 + MIANOWNIK_UP);
+    add_spk(MSG_DROPPING);
+  }
+  // say list of drops
+  for(char ff=0; ff < drop_count; ff++) {
+    if(dropping[ff] == person) {
+      if(--person_drop_count == 0) {
+        biernik = BIERNIK_DOWN_ITEMS;
+      }
+      add_spk(MSG_OFFS_ITEMS + dropped[ff] * 4 + biernik);
+      if(person_drop_count == 1) {
+        add_spk(MSG_I + random(2));
+      }
+    }
+  }
+}
+
+
 char handing[NUM_ITEMS];  // osoba która daje
 char handed[NUM_ITEMS];   // dawany przedmiot
 char receiver[NUM_ITEMS]; // osoba która dostaje
@@ -1194,9 +1231,9 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
       // if have nakaz, do not leave on parter
       // else if target is here, do not leave
       // else leave 30%
-      if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person ||
-         is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person ||
-         is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person) {
+      if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI ||
+         is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == PERSON_SMUTNI ||
+         is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == PERSON_SMUTNI) {
         // smutni maja przy sobie jakis wyrok lub nakaz
         if(curr_floor == PLACE_GROUND_FLOOR)
           return false;    // no exit on ground floor if have doc to deliver
@@ -1215,7 +1252,7 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
       break;
   }
 
-  // wszyscy poza smutnymi mając nakaz wysiadają tylko na parterze
+  // wszyscy z nakazem, poza smutnymi, wysiadają tylko na parterze
   if(person != PERSON_SMUTNI) {
     if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person ||
        is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person ||
@@ -1267,7 +1304,7 @@ char want_to_enter(char person) {
     set_bit_flag(&rejected_person_flags, person);
     return false;
   }
-  clear_bit_flag(&unhappy_person_flags, person);
+  clear_bit_flag(&unhappy_person_flags, person);  // who's not rejected - gets happy
   
   // assumption: person is on curr_floor
   switch(person) {
@@ -1318,8 +1355,8 @@ char want_to_enter(char person) {
       }
       break;
     case PERSON_SMUTNI:
-      if(smutni_target > -1 && 
-         person_loc(smutni_target) == PLACE_CABIN)
+      //if(smutni_target > -1) // && 
+         //person_loc(smutni_target) == PLACE_CABIN)
         return true;  // smutni wchodza jesli ich target jest w windzie
       break;
   }
@@ -1349,34 +1386,50 @@ char want_to_be_picked(char picking_person, char item) {
 char communicate_person_owns(char person) {
   // loop through items and find those on the person
   char own_count = 0;
+  char biernik = BIERNIK_UP_ITEMS;
   char item;
   for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
-    if(is_item_on_person(ff) == person) {
-      if(own_count == 0) {
-        add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
-        add_spk(MSG_OWNS);
-      }
+    if(is_item_on_person(ff) == person)
       own_count++;
+  }
+  if(own_count > 0) {
+    add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
+    add_spk(MSG_OWNS);
+  } else {
+    return 0;
+  }
+  for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
+    if(is_item_on_person(ff) == person) {
       item = ff - NUM_PERSONS;
-      add_spk(MSG_OFFS_ITEMS + item * 4 + BIERNIK_UP_ITEMS);  // item name
-      // na kogo ten wyrok
+      if(--own_count == 0 && item != ITEM_WYROK) {
+        biernik = BIERNIK_DOWN_ITEMS;  // if last item and not a sentence, use closing pronounciation
+      }
+      add_spk(MSG_OFFS_ITEMS + item * 4 + biernik);  // item name
+      // who the sentence refers to
       if(item == ITEM_WYROK) {
         add_spk(MSG_NA);
-        add_spk(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
+//          say_num(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
+//          add_spk(76);  // 76 = oraz
+          add_spk(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
+//          add_spk(9);
       }
+      if(own_count == 1)
+        add_spk(MSG_I + random(2));
     }
   }
+/*
   if(own_count == 1) {
     chg_spk(MSG_OFFS_ITEMS + item * 4 + BIERNIK_DOWN_ITEMS);  // item name
   } else if(own_count > 1) {
     chg_spk(MSG_I + random(2));
     add_spk(MSG_OFFS_ITEMS + item * 4 + BIERNIK_DOWN_ITEMS);  // item name
   }
+*/
 }
 void communicate_possessions_in_cabin() {
   char person;
-  for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
-    if((person = is_person(ff)) > -1) {
+  for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {    // zawezic do samych persons !!!
+    if((person = is_person(ff)) > -1) {             // zlikwidowac !!!
       //person--; // is_person() returns id, to use -1 as false
       if(is_at_place(person) == PLACE_CABIN) {
         // person in cabin
@@ -1442,7 +1495,7 @@ void communicate_mystery_floor_gossip() {
   do {
     for(char person = 0; person < NUM_PERSONS; person++) {
       if(is_bit_flag(nuts_person_flags, person))
-      if(is_at_place(person) == (PLACE_CABIN)) {
+      if(is_at_place(person) == PLACE_CABIN) {
         nuts_count++;
         if(random(10) < nuts_count) {
           add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
@@ -1475,10 +1528,10 @@ void migrate_objs() {
   char place;
   char other_person;
   for(char ff = 0; ff < NUM_PERSONS; ff++) {
-    if((person = is_person(ff)) > -1) {
+    if((person = is_person(ff)) > -1) {        // zlikwidowac!!!
       //person--; // is_person() returns id, to use -1 as false
-      if((place = is_at_place(person)) == (PLACE_CABIN)) {
-        place--;
+      if((place = is_at_place(person)) == PLACE_CABIN) {
+        //place--;
         // person in cabin
         if(hospitalized_person == -2) {
           hospitalize(person);  // it also changes hospitalized_person to person id
@@ -1502,10 +1555,10 @@ void migrate_objs() {
     }
   }
   for(char ff = 0; ff < NUM_PERSONS; ff++) {
-    if((person = is_person(ff)) > -1) {
+    if((person = is_person(ff)) > -1) {      // zlikwidowac!!!
       //person--; // is_person() returns id, to use -1 as false
-      if((place = is_at_place(person)) == (curr_floor)) {
-        place--;
+      if((place = is_at_place(person)) == curr_floor) {
+        //place--;
         // person not in cabin
         if(!is_bit_flag(exiting_flags, person) && want_to_enter(person))
           enter_lift(person);
@@ -1513,11 +1566,11 @@ void migrate_objs() {
     }
   }
   // now force exits if srebrny dev entered the lift
-  if(is_at_place(PERSON_SREBRNY) == (PLACE_CABIN)) {
+  if(is_at_place(PERSON_SREBRNY) == PLACE_CABIN) {
     for(char ff = 0; ff < NUM_PERSONS; ff++) {
       if(ff == PERSON_SREBRNY)  // ignore srebrny
         continue;
-      if((is_at_place(ff)) == (PLACE_CABIN)) {
+      if((is_at_place(ff)) == PLACE_CABIN) {
         // person in cabin
         force_exit_lift(ff);
       }
@@ -1540,8 +1593,8 @@ void migrate_objs() {
       }
     } else
     // it does not sit on a person; check if it sits on place (floor or cabin)
-    if((place = is_at_place(ff)) > 0) {
-      place--;
+    if((place = is_at_place(ff)) > -1) {
+      //place--;
       if((other_person = are_other_persons_here(ff)) > 0) {
         other_person--;
         if(want_to_be_picked(other_person, ff)) {
@@ -1573,10 +1626,11 @@ char just_exited(char person) {
 char get_next_target() {
   for(char person=0; person < NUM_PERSONS; person++) {
     if(person_loc(person) > -1 && 
-       is_bit_flag(forced_exiting_flags, person)) {
+       is_bit_flag(targeted_person_flags, person)) {
       return person;
     }
   }
+  return -1;
 }
 void proceed_after_migration() {
   char person;
@@ -1628,7 +1682,7 @@ void proceed_after_migration() {
 
   if(curr_floor == PLACE_MYSTERY_FLOOR)
   for(char ff = 0; ff < NUM_PERSONS; ff++) {
-    if((person = is_person(ff)) > -1) {
+    if((person = is_person(ff)) > -1) {     // zlikwidowac!!!
       //person--; // is_person() returns id, to use -1 as false
       if((is_at_place(person)) == PLACE_CABIN) {
         //place--;
@@ -1666,6 +1720,7 @@ void proceed_after_migration() {
   if((just_exited(PERSON_SMUTNI) || person_loc(PERSON_SMUTNI) <= PLACE_GROUND_FLOOR) && // smutni wlasnie wyszli z windy lub sa poza budynkiem
      curr_floor == PLACE_GROUND_FLOOR &&        // jestesmy na parterze
      smutni_target == -1 &&                     // smutni nie maja w tej chwili targetu
+     targeted_person_flags &&                   // jacys ludzie podpadli wladzy
      is_at_place(NUM_PERSONS + ITEM_WYROK) == PLACE_GROUND_FLOOR) {  // wyrok mozna podniesc na parterze
     smutni_target = get_next_target();          // smutni dostają target do schwytania
     pick_item(PERSON_SMUTNI, NUM_PERSONS + ITEM_WYROK);       // smutni podnoszą wyrok
@@ -1955,7 +2010,7 @@ void setup() {
       max_people_on_board = (NUM_PERSONS / 2) > 2 ? 2 : NUM_PERSONS / 2;
 
       // Initialize the plot related data
-      set_bit_flag(&plot_flags, LIMITS_APPLY_FLAG); // start with people obeying lift limits
+ // DEBUG!!!     set_bit_flag(&plot_flags, LIMITS_APPLY_FLAG); // start with people obeying lift limits
 
       // Initially send OFF events to all shift outputs
       for(ff=0; ff<SHIFT_NUM_BITS; ff++) {
@@ -1964,7 +2019,7 @@ void setup() {
 }
 
 
-
+#define DEBUG_DELAY  * 0 + 1
 
 void loop() {
 
@@ -2000,7 +2055,7 @@ void loop() {
     case LIFT_STOPPING:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 1200;  // how long it will be stopping
+             state_countdown = 1200 DEBUG_DELAY;  // how long it will be stopping
            }
            if(state_countdown == 0) {
              state = LIFT_STOPPED;
@@ -2011,7 +2066,7 @@ void loop() {
     case LIFT_STOPPED:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 950;  // how long it will stand still after stopping
+             state_countdown = 950 DEBUG_DELAY;  // how long it will stand still after stopping
            }
            if(state_countdown == 0) {
              state = DOOR_OPENING;
@@ -2021,7 +2076,7 @@ void loop() {
     case DOOR_OPENING:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 1600;  // how long takes opening the door
+             state_countdown = 1600 DEBUG_DELAY;  // how long takes opening the door
            }
            if(state_countdown == 0) {
              state = DOOR_OPEN;
@@ -2032,7 +2087,7 @@ void loop() {
            //enter_lift_state(500);
            if(last_state != state) {
              last_state = state;
-             state_countdown = 200;  // for how long minimum the door stays open
+             state_countdown = 200 DEBUG_DELAY;  // for how long minimum the door stays open
            }
            if(state_countdown == 0) {
              state = PASSENGERS_MOVEMENT;
@@ -2046,7 +2101,7 @@ void loop() {
              communicate_forced_exits();
              communicate_handed();
              communicate_possessions_entered_to_cabin();
-             communicate_target_of_entering_smutni();
+             //communicate_target_of_entering_smutni();
              communicate_mystery_floor_gossip();
              if(is_at_place(person_spy) == (PLACE_CABIN))
                communicate_floor_contains(curr_floor);
@@ -2058,7 +2113,7 @@ void loop() {
            //enter_lift_state(500);
            if(last_state != state) {
              last_state = state;
-             state_countdown = 1500;  // for how long the passenger enters or exits the lift
+             state_countdown = 1500 DEBUG_DELAY;  // for how long the passenger enters or exits the lift
            }
            if(is_speaking())
              state_countdown = 500;  // keep waiting until communicating object moves
@@ -2073,7 +2128,7 @@ void loop() {
     case DOOR_CLOSING:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 700;  // how long takes closing the door
+             state_countdown = 700 DEBUG_DELAY;  // how long takes closing the door
            }
            if(state_countdown == 0) {
              state = DOOR_CLOSED;
@@ -2083,7 +2138,7 @@ void loop() {
     case DOOR_CLOSED:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 100;  // for how long the lift holds after closing the door before it starts running
+             state_countdown = 100 DEBUG_DELAY;  // for how long the lift holds after closing the door before it starts running
            }
            if(state_countdown == 0) {
              if(target_floor != curr_floor) {
@@ -2095,7 +2150,7 @@ void loop() {
     case LIFT_STARTING:
            if(last_state != state) {
              last_state = state;
-             state_countdown = 500;  // for how long the lift decides where to go
+             state_countdown = 500 DEBUG_DELAY;  // for how long the lift decides where to go
            }
            if(state_countdown == 0) {
              if(dir > 0) {
@@ -2118,7 +2173,7 @@ void loop() {
            if(last_state != state) {
              last_state = state;
              //dir = 1;
-             state_countdown = 500;  // for how long the lift goes up one floor
+             state_countdown = 500 DEBUG_DELAY;  // for how long the lift goes up one floor
            }
            // probability of falling down while going upwards
            if(people_on_board > max_people_on_board + 1 &&
@@ -2151,7 +2206,7 @@ void loop() {
            if(last_state != state) {
              last_state = state;
              // dir = -1;
-             state_countdown = 500;  // for how long the lift goes down one floor
+             state_countdown = 500 DEBUG_DELAY;  // for how long the lift goes down one floor
            }
            // probability of falling down while going downwards
            if(people_on_board > max_people_on_board + 1 && 
