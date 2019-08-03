@@ -729,7 +729,7 @@ unsigned long plot_flags = 0;
 unsigned long nuts_person_flags = 0;
 unsigned long unhappy_person_flags = 0;
 unsigned long rejected_person_flags = 0;
-unsigned long targeted_person_flags = 22;  // DEBUG!!! 0;
+unsigned long targeted_person_flags = 0;
 
 
 /*
@@ -1197,13 +1197,14 @@ char is_item_on_person(char obj_idx) {
     return -1;
   return location_id - NUM_FLOORS;
 }
+/*
 char is_at_place(char obj_idx) {
   if(obj_idx < 0)
     return -1;
   char location = lift_obj[obj_idx];
   return is_place(location);  // is_place() returns place_id, or -1
 }
-
+*/
 
 char want_to_exit(char person) {  // equal to idx in lift_obj[]!
   switch(person) {
@@ -1239,7 +1240,7 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
           return false;    // no exit on ground floor if have doc to deliver
         else {
           if(smutni_target > -1 &&
-             is_at_place(smutni_target) == curr_floor) {
+             person_loc(smutni_target) == curr_floor) {  // !!! consider renaming person_loc() and getting rid of is_at_place()
             // target jest na tym pietrze, wysiadamy do niego
             return true;
           }
@@ -1429,7 +1430,7 @@ char communicate_person_owns(char person) {
 void communicate_possessions_in_cabin() {
   char person;
   for(person = 0; person < NUM_PERSONS; person++) {
-      if(is_at_place(person) == PLACE_CABIN) {  // choose is_at_place() or location() and get rid of one
+      if(person_loc(person) == PLACE_CABIN) {  // choose is_at_place() or person_loc() and get rid of one
         // person in cabin
         communicate_person_owns(person);
       }
@@ -1458,7 +1459,7 @@ char num_items_on_floor(char floor_num) {
   // loop through items and find those on the floor
   char own_count = 0;
   for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
-    if(is_at_place(ff) == floor_num) {
+    if(person_loc(ff) == floor_num) {  // consider renaming person_loc() and getting rid of is_at_place()
       own_count++;
     }
   }
@@ -1469,7 +1470,7 @@ char communicate_floor_contains(char floor_num) {
   char own_count = 0;
   char item;
   for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
-    if(is_at_place(ff) == floor_num) {
+    if(person_loc(ff) == floor_num) {  // consider renaming person_loc() and getting rid of is_at_place()
       if(own_count == 0) {
         add_spk(MSG_FLOOR_CONTAINS);
       }
@@ -1492,7 +1493,7 @@ void communicate_mystery_floor_gossip() {
   do {
     for(char person = 0; person < NUM_PERSONS; person++) {
       if(is_bit_flag(nuts_person_flags, person))
-      if(is_at_place(person) == PLACE_CABIN) {
+      if(person_loc(person) == PLACE_CABIN) {  // consider renaming person_loc() and getting rid of is_at_place()
         nuts_count++;
         if(random(10) < nuts_count) {
           add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
@@ -1525,7 +1526,7 @@ void migrate_objs() {
   char place;
   char other_person;
   for(person = 0; person < NUM_PERSONS; person++) {
-      if((place = is_at_place(person)) == PLACE_CABIN) {  //!!! reconsider is_at_place() against location()
+      if((place = person_loc(person)) == PLACE_CABIN) {  // !!! consider renaming person_loc() and getting rid of is_at_place()
         // person in cabin
         if(hospitalized_person == -2) {
           hospitalize(person);  // it also changes hospitalized_person to person id
@@ -1547,18 +1548,18 @@ void migrate_objs() {
       */
   }
   for(person = 0; person < NUM_PERSONS; person++) {
-      if((place = is_at_place(person)) == curr_floor) {
+      if((place = person_loc(person)) == curr_floor) {   // !!! consider renaming person_loc() and getting rid of is_at_place()
         // person not in cabin
         if(!is_bit_flag(exiting_flags, person) && want_to_enter(person))
           enter_lift(person);
       }
   }
   // now force exits if srebrny dev entered the lift
-  if(is_at_place(PERSON_SREBRNY) == PLACE_CABIN) {
+  if(person_loc(PERSON_SREBRNY) == PLACE_CABIN) {   // !!! consider renaming person_loc() and getting rid of is_at_place()
     for(person = 0; person < NUM_PERSONS; person++) {
       if(person == PERSON_SREBRNY)  // ignore srebrny
         continue;
-      if((is_at_place(person)) == PLACE_CABIN) {
+      if((person_loc(person)) == PLACE_CABIN) {  // !!! consider renaming person_loc() and getting rid of is_at_place()
         // person in cabin
         force_exit_lift(person);
       }
@@ -1623,7 +1624,7 @@ void proceed_after_migration() {
   char person;
   char place;
   char other_person;
-  if(is_at_place(PERSON_WOLAND) == PLACE_MYSTERY_FLOOR) {     // woland exited on floor 11
+  if(person_loc(PERSON_WOLAND) == PLACE_MYSTERY_FLOOR) {     // woland exited on floor 11  // !!! consider renaming person_loc() and getting rid of is_at_place()
     move_person_by_stairs(PERSON_WOLAND, 0);  // move woland to ground floor
   }
   if(just_entered(PERSON_WOLAND))
@@ -1648,7 +1649,7 @@ void proceed_after_migration() {
   if(just_exited(PERSON_ANIA)) {
     // anuszka takes the oil if it is not on 6th floor
      if(curr_floor != 6) {
-       if(is_at_place(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor)
+       if(person_loc(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor)   // !!! consider renaming person_loc() and getting rid of is_at_place()
          pick_item(PERSON_ANIA, NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
      } else {
        if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANIA)
@@ -1659,7 +1660,7 @@ void proceed_after_migration() {
   if(just_exited(PERSON_ANUSZKA)) {
     // anuszka takes the oil if it is not on 6th floor
      if(curr_floor != 6) {
-       if(is_at_place(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor)
+       if(person_loc(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor)  // !!! consider renaming person_loc() and getting rid of is_at_place()
          pick_item(PERSON_ANUSZKA, NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
      } else {
        if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == PERSON_ANUSZKA)
@@ -1669,7 +1670,7 @@ void proceed_after_migration() {
 
   if(curr_floor == PLACE_MYSTERY_FLOOR)
   for(person = 0; person < NUM_PERSONS; person++) {
-      if((is_at_place(person)) == PLACE_CABIN) {
+      if((person_loc(person)) == PLACE_CABIN) {  // !!! consider renaming person_loc() and getting rid of is_at_place()
         switch(person) {
           case PERSON_ANUSZKA:
           case PERSON_WOLAND:
@@ -1692,7 +1693,7 @@ void proceed_after_migration() {
   }
 
   if(smutni_target >= 0 &&  // smutni maja kogos na celowniku; szukaja kogos
-     (is_at_place(PERSON_SMUTNI) == is_at_place(smutni_target)) &&    // smutni i ich target sa na tym samym pietrze
+     (person_loc(PERSON_SMUTNI) == person_loc(smutni_target)) &&    // smutni i ich target sa na tym samym pietrze  // !!! consider renaming person_loc() and getting rid of is_at_place()
      is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI) {  // smutni mają przy sobie wyrok
     hand_item_to_other_person(NUM_PERSONS + ITEM_WYROK, smutni_target);  // smutni dają nakaz targetowi
   }
@@ -1704,7 +1705,7 @@ void proceed_after_migration() {
      curr_floor == PLACE_GROUND_FLOOR &&        // jestesmy na parterze
      smutni_target == -1 &&                     // smutni nie maja w tej chwili targetu
      targeted_person_flags &&                   // jacys ludzie podpadli wladzy
-     is_at_place(NUM_PERSONS + ITEM_WYROK) == PLACE_GROUND_FLOOR) {  // wyrok mozna podniesc na parterze
+     person_loc(NUM_PERSONS + ITEM_WYROK) == PLACE_GROUND_FLOOR) {  // wyrok mozna podniesc na parterze   // !!! consider renaming person_loc() and getting rid of is_at_place()
     smutni_target = get_next_target();          // smutni dostają target do schwytania
     pick_item(PERSON_SMUTNI, NUM_PERSONS + ITEM_WYROK);       // smutni podnoszą wyrok
     lift_obj[PERSON_SMUTNI] = PLACE_GROUND_FLOOR;             // smutni wracają na parter, nawet jeśli byli poza budynkiem
@@ -2084,7 +2085,7 @@ void loop() {
              communicate_possessions_entered_to_cabin();
              //communicate_target_of_entering_smutni();
              communicate_mystery_floor_gossip();
-             if(is_at_place(person_spy) == (PLACE_CABIN))
+             if(person_loc(person_spy) == PLACE_CABIN)  // !!! consider renaming person_loc() and getting rid of is_at_place()
                communicate_floor_contains(curr_floor);
              clear_lift_world_queues();  // queues already loaded to communication
              //communicate_possessions_in_cabin();
