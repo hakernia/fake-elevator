@@ -903,8 +903,8 @@ void remove_person(char person) {
 #define MSG_JESTES_U_CELU       48
 #define MSG_ANUSZKA_ROZLALA_OLEJ 49
 #define MSG_FLOOR_CONTAINS      89   
-#define MSG_SHOCKED_DICOVERY_MYSTERY_FLOOR  90 // !!! dodac "mdleje na widok nieznanego piętra"
-#define MSG_SAYS_MYSTERY_FLOOR_EXISTS  91  // !!! dodac "mówi, ze istnieje tajemne pietro"
+#define MSG_SHOCKED_DICOVERY_MYSTERY_FLOOR  90
+#define MSG_SAYS_MYSTERY_FLOOR_EXISTS  91
 #define MSG_NIE_WPUSZCZONY      92
 #define MSG_NIE_WPUSZCZENI      93
 #define MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA  94
@@ -1428,14 +1428,11 @@ char communicate_person_owns(char person) {
 }
 void communicate_possessions_in_cabin() {
   char person;
-  for(char ff = 0; ff < NUM_PERSONS + NUM_ITEMS; ff++) {    // zawezic do samych persons !!!
-    if((person = is_person(ff)) > -1) {             // zlikwidowac !!!
-      //person--; // is_person() returns id, to use -1 as false
-      if(is_at_place(person) == PLACE_CABIN) {
+  for(person = 0; person < NUM_PERSONS; person++) {
+      if(is_at_place(person) == PLACE_CABIN) {  // choose is_at_place() or location() and get rid of one
         // person in cabin
         communicate_person_owns(person);
       }
-    }
   }
 }
 void communicate_possessions_entered_to_cabin() {
@@ -1527,11 +1524,8 @@ void migrate_objs() {
   char person;
   char place;
   char other_person;
-  for(char ff = 0; ff < NUM_PERSONS; ff++) {
-    if((person = is_person(ff)) > -1) {        // zlikwidowac!!!
-      //person--; // is_person() returns id, to use -1 as false
-      if((place = is_at_place(person)) == PLACE_CABIN) {
-        //place--;
+  for(person = 0; person < NUM_PERSONS; person++) {
+      if((place = is_at_place(person)) == PLACE_CABIN) {  //!!! reconsider is_at_place() against location()
         // person in cabin
         if(hospitalized_person == -2) {
           hospitalize(person);  // it also changes hospitalized_person to person id
@@ -1546,33 +1540,27 @@ void migrate_objs() {
       } 
       /*
         else {
-        place--;
         // person not in cabin
         if((place == curr_floor) && want_to_enter(person))
           enter_lift(person);
       }
       */
-    }
   }
-  for(char ff = 0; ff < NUM_PERSONS; ff++) {
-    if((person = is_person(ff)) > -1) {      // zlikwidowac!!!
-      //person--; // is_person() returns id, to use -1 as false
+  for(person = 0; person < NUM_PERSONS; person++) {
       if((place = is_at_place(person)) == curr_floor) {
-        //place--;
         // person not in cabin
         if(!is_bit_flag(exiting_flags, person) && want_to_enter(person))
           enter_lift(person);
       }
-    }
   }
   // now force exits if srebrny dev entered the lift
   if(is_at_place(PERSON_SREBRNY) == PLACE_CABIN) {
-    for(char ff = 0; ff < NUM_PERSONS; ff++) {
-      if(ff == PERSON_SREBRNY)  // ignore srebrny
+    for(person = 0; person < NUM_PERSONS; person++) {
+      if(person == PERSON_SREBRNY)  // ignore srebrny
         continue;
-      if((is_at_place(ff)) == PLACE_CABIN) {
+      if((is_at_place(person)) == PLACE_CABIN) {
         // person in cabin
-        force_exit_lift(ff);
+        force_exit_lift(person);
       }
     }
   }
@@ -1594,7 +1582,6 @@ void migrate_objs() {
     } else
     // it does not sit on a person; check if it sits on place (floor or cabin)
     if((place = is_at_place(ff)) > -1) {
-      //place--;
       if((other_person = are_other_persons_here(ff)) > 0) {
         other_person--;
         if(want_to_be_picked(other_person, ff)) {
@@ -1681,11 +1668,8 @@ void proceed_after_migration() {
   }
 
   if(curr_floor == PLACE_MYSTERY_FLOOR)
-  for(char ff = 0; ff < NUM_PERSONS; ff++) {
-    if((person = is_person(ff)) > -1) {     // zlikwidowac!!!
-      //person--; // is_person() returns id, to use -1 as false
+  for(person = 0; person < NUM_PERSONS; person++) {
       if((is_at_place(person)) == PLACE_CABIN) {
-        //place--;
         switch(person) {
           case PERSON_ANUSZKA:
           case PERSON_WOLAND:
@@ -1697,7 +1681,6 @@ void proceed_after_migration() {
           set_bit_flag(&nuts_person_flags, person);
         }
       }
-    }
   }
 
   // smutni sie skarza centrali jesli maja na kogos wyrok a nie moga wejsc do windy
@@ -1743,7 +1726,6 @@ void proceed_after_migration() {
     if((person = is_person(ff)) > -1) {
       //person--; // is_person() returns id, to use -1 as false
       if((place = is_at_place(person)) == (PLACE_CABIN)) {
-        place--;
         // person in cabin
         if(hospitalized_person == -2) {
           hospitalize(person);  // it also changes hospitalized_person to person id
@@ -1752,7 +1734,6 @@ void proceed_after_migration() {
         if(want_to_exit(person))
           exit_lift(person);
       } else {
-        place--;
         // person not in cabin
         if((place == curr_floor) && want_to_enter(person))
           enter_lift(person);
