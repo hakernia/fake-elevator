@@ -711,9 +711,9 @@ char is_speaking() {
 #define PERSON_SMUTNI      23
 #define PERSON_SREBRNY     24
 #define ITEM_OLEJ_SLONECZNIKOWY  0
-#define ITEM_WYROK     20  // !!! 20 to zegarek, chwilowo uzyty jako wezwanie
-#define ITEM_NAKAZ     22
-#define ITEM_WEZWANIE  23
+#define ITEM_MADHOUSE_CALL 19  // a requirement to go to madhouse
+#define ITEM_WYROK         20  // !!! 20 to zegarek, chwilowo uzyty jako wezwanie
+#define ITEM_WEZWANIE      23
 
 char person_spy = PERSON_SPY;
 
@@ -726,10 +726,11 @@ char person_spy = PERSON_SPY;
 //char anuszka_broke_oil = 0;
 
 unsigned long plot_flags = 0;
-unsigned long nuts_person_flags = 0;
-unsigned long unhappy_person_flags = 0;
-unsigned long rejected_person_flags = 0;
-unsigned long targeted_person_flags = 0;
+unsigned long nuts_person_flags = 0;     // saw 11th floor
+unsigned long targeted_nuts_flags = 0;   // talked about 11th floor; these are randomly selected by SMUTNI to madhouse
+unsigned long unhappy_person_flags = 0;  // could not get in to lift
+unsigned long rejected_person_flags = 0; // rejected from lift by SREBRNY, so criminals
+unsigned long targeted_person_flags = 0; // these are randomly selected by SMUTNI to prison
 
 
 /*
@@ -797,8 +798,8 @@ char lift_obj[NUM_PERSONS + NUM_ITEMS] =
   5,               // item 16 ramka is on 5th floor
   6,               // item 17 szkatulka is on 6th floor
   0,               // item 18 worek ziemniakow is on 0th floor
-  8,               // item 19 zdjecie is on 8th floor
-  0                // item 20 wyrok(zegarek) is on ground floor
+  0,               // item 19 wezwanie do wariatkowa (dawniej zdjecie!!!) is on 8th floor
+  0                // item 20 wyrok (dawniej zegarek!!!) is on ground floor
   // nakaz aresztowania
   // wezwanie
   // 
@@ -807,8 +808,68 @@ char people_on_board;
 char max_people_on_board;
 char hospitalized_person;
 char removed_person;
+char escorted_to_madhouse;
 char rozsadek_rzadu = 3;   // !!! make it bigger?; declines with rejections of smutni
-char smutni_target = -1;   // noone on target
+char smutni_target = -1;   // noone on target, noone to madhouse; !!! wywalic
+
+char person_loc(char person) {
+  return lift_obj[person];
+}
+
+
+
+#define MAX_TRACKERS 2
+char track_target[MAX_TRACKERS] = {-1,-1};
+char track_item[MAX_TRACKERS] = {-1, -1};
+
+void add_tracker(char item, char target_person) {
+  for(char ff=0; ff<MAX_TRACKERS; ff++) {
+    if(track_item[ff] == -1) {
+      track_item[ff] = item;
+      track_target[ff] = target_person;
+    }
+  }
+}
+void remove_tracker(char item) {
+  for(char ff=0; ff<MAX_TRACKERS; ff++) {
+    if(track_item[ff] == item) {
+      track_item[ff] = -1;
+      track_target[ff] = -1;
+    }
+  }
+}
+// trackers are active even when tracked person gets the item
+// tracker is deleted by history (tracked person gets inprisoned etc)
+// the deletion depends on which item is tracked
+void check_trackers() {
+  char hunter;  // person who has a tracked item
+  for(char ff = 0; ff < MAX_TRACKERS; ff++) {
+    if(track_target[ff] > -1)                                             // tracker is active
+      if((hunter = is_item_on_person(NUM_PERSONS + track_item[ff])) > -1) // tracked item is on person
+        if(hunter != track_target[ff])                                    // hunter is not a tracked person
+          if(person_loc(hunter) == person_loc(track_target[ff]))          // hunter and target are at the same place
+            hand_item_to_other_person(NUM_PERSONS + track_item[ff], track_target[ff]);  // hand item to target person
+  }
+}
+char my_target_is_here(char hunter, char location) {
+  for(char ff = 0; ff < MAX_TRACKERS; ff++) {
+    if(track_target[ff] > -1)                                             // tracker is active
+      if(is_item_on_person(NUM_PERSONS + track_item[ff]) == hunter)       // tracked item is on hunter
+        if(hunter != track_target[ff])                                    // hunter is not a tracked person
+          if(person_loc(track_target[ff]) == location)                    // tracked person is at checked location
+            return true;
+  }
+  return false;
+}
+char is_item_tracked(char item) {
+  for(char ff = 0; ff < MAX_TRACKERS; ff++) {
+    if(track_item[ff] == item)          // there is a tracker for given item
+      return track_target[ff];
+  }
+  return -1;
+}
+
+
 
 //char exiting[NUM_PERSONS];
 char ex_count;
@@ -845,30 +906,40 @@ void move_item_floor_to_floor(char item, char to_floor) {
 
 // uses curr_floor
 void hospitalize(char person) {
-  lift_obj[person] = -1;
+  lift_obj[person] = -1;        // -1 - cemetery
   hospitalized_person = person;
   people_on_board--;
 }
 
-char is_guilty(char person) {
+char is_guilty(char person, char own_only) {
   if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person)
-    return ITEM_WYROK;
-  if(is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person)
-    return ITEM_NAKAZ;
+    if(!own_only || own_only && is_item_tracked(ITEM_WYROK) == person)
+      return ITEM_WYROK;
+  if(is_item_on_person(NUM_PERSONS + ITEM_MADHOUSE_CALL) == person)
+    if(!own_only || own_only && is_item_tracked(ITEM_MADHOUSE_CALL) == person)
+      return ITEM_MADHOUSE_CALL;
   if(is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person)
-    return ITEM_WEZWANIE;
+    if(!own_only || own_only && is_item_tracked(ITEM_WEZWANIE) == person)
+      return ITEM_WEZWANIE;
   return 0;
 }
 void remove_person(char person) {
   //drop_items(person);  // let she drop ITEM_WYROK only
   //drop_item(NUM_PERSONS + ITEM_WYROK);
   lift_obj[NUM_PERSONS + ITEM_WYROK] = 0;
-  lift_obj[person] = -2;
+  lift_obj[person] = -2;       // -2 - prison
   removed_person = person;
   people_on_board--;
-  smutni_target = -1;
+  remove_tracker(ITEM_WYROK);
 }
-
+void close_in_madhouse(char person) {
+  lift_obj[NUM_PERSONS + ITEM_MADHOUSE_CALL] = 0;
+  lift_obj[person] = -3;       // -3 - madhouse
+  escorted_to_madhouse = person;
+  people_on_board--;
+  //smutni_target = -1;
+  remove_tracker(ITEM_MADHOUSE_CALL);
+}
 
 // sentence modifiers
 #define MIANOWNIK_UP        0
@@ -916,7 +987,8 @@ void remove_person(char person) {
 
 #define MSG_MUSI_WYJSC         228
 #define MSG_MUSZA_WYJSC        229
-#define MSG_NA                 230  // for reporting "na kogo"
+//#define MSG_NA                 230  // for reporting "na kogo"
+#define MSG_UCIESZY_SIE        230  // for reporting "na kogo"
 #define MSG_WOLAND_INTRO       231
 #define MSG_DROPPING            98 // DEBUG!!!, docelowo ma byc 232
 
@@ -1162,6 +1234,7 @@ void clear_lift_world_queues() {
   hand_count = 0;
   hospitalized_person = -1;  // -1 - noone to hospitalize, -2 - hospitalize someone in lift
   removed_person = -1;
+  escorted_to_madhouse = -1;
   rejected_person_flags = 0;
 }
 // checks if object idx is a person (and not an item)
@@ -1232,32 +1305,41 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
       // if have nakaz, do not leave on parter
       // else if target is here, do not leave
       // else leave 30%
-      if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI ||
-         is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == PERSON_SMUTNI ||
-         is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == PERSON_SMUTNI) {
+/*      if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI ||
+         is_item_on_person(NUM_PERSONS + ITEM_MADHOUSE_CALL) == PERSON_SMUTNI ||
+         is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == PERSON_SMUTNI)
+*/
+      if(is_guilty(PERSON_SMUTNI, false)) {  // !!! consider changing name is_guilty() on has_official_papers() etc.
         // smutni maja przy sobie jakis wyrok lub nakaz
-        if(curr_floor == PLACE_GROUND_FLOOR)
+        if(curr_floor == PLACE_GROUND_FLOOR) {
           return false;    // no exit on ground floor if have doc to deliver
+        }
         else {
+          /*
           if(smutni_target > -1 &&
              person_loc(smutni_target) == curr_floor) {  // !!! consider renaming person_loc() and getting rid of is_at_place()
             // target jest na tym pietrze, wysiadamy do niego
             return true;
-          }
+          */
+            return my_target_is_here(PERSON_SMUTNI, curr_floor);
         }
       } else {
         // no paper to deliver; exit at ground floor
-        if(curr_floor == PLACE_GROUND_FLOOR)
-          return true;    // no exit on ground floor if have doc to deliver        
+        if(curr_floor == PLACE_GROUND_FLOOR) {
+          return true;
+        }
       }
       break;
   }
 
   // wszyscy z nakazem, poza smutnymi, wysiadają tylko na parterze
   if(person != PERSON_SMUTNI) {
+    /*
     if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person ||
-       is_item_on_person(NUM_PERSONS + ITEM_NAKAZ) == person ||
-       is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person) {
+       is_item_on_person(NUM_PERSONS + ITEM_MADHOUSE_CALL) == person ||
+       is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person) 
+    */
+    if(is_guilty(person, true)) {  // person has official papers tracked to her
         // ma doręczony nakaz, wyrok, wezwanie; wiec wysiada tylko na parterze
       if(curr_floor == PLACE_GROUND_FLOOR)
         return true;
@@ -1269,10 +1351,6 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
   return ((person % NUM_FLOORS) == curr_floor && random(10) < 8) ||
          (curr_floor == 0 && random(10) < 5) ||
          random(10) < 3;
-}
-
-char person_loc(char person) {
-  return lift_obj[person];
 }
 
 void communicate_rejections() {
@@ -1388,7 +1466,9 @@ char communicate_person_owns(char person) {
   // loop through items and find those on the person
   char own_count = 0;
   char biernik = BIERNIK_UP_ITEMS;
+  char mianownik = MIANOWNIK_UP;
   char item;
+  char tracked_person;
   for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
     if(is_item_on_person(ff) == person)
       own_count++;
@@ -1402,16 +1482,19 @@ char communicate_person_owns(char person) {
   for(char ff = NUM_PERSONS; ff < NUM_PERSONS + NUM_ITEMS; ff++) {
     if(is_item_on_person(ff) == person) {
       item = ff - NUM_PERSONS;
-      if(--own_count == 0 && item != ITEM_WYROK) {
+      if(--own_count == 0) {
         biernik = BIERNIK_DOWN_ITEMS;  // if last item and not a sentence, use closing pronounciation
+        mianownik = MIANOWNIK_DOWN;
       }
       add_spk(MSG_OFFS_ITEMS + item * 4 + biernik);  // item name
       // who the sentence refers to
-      if(item == ITEM_WYROK) {
-        add_spk(MSG_NA);
+      tracked_person = is_item_tracked(item);
+      if(tracked_person > -1  && tracked_person != person) {  // item jest dla kogos, ale nie dla biezacej osoby
+        //add_spk(MSG_NA);
+        add_spk(MSG_UCIESZY_SIE);
 //          say_num(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
 //          add_spk(76);  // 76 = oraz
-          add_spk(MSG_OFFS_PERSONS + smutni_target * 4 + BIERNIK_PERSONS);
+          add_spk(MSG_OFFS_PERSONS + tracked_person * 4 + mianownik);
 //          add_spk(9);
       }
       if(own_count == 1)
@@ -1499,8 +1582,10 @@ void communicate_mystery_floor_gossip() {
           add_spk(MSG_OFFS_PERSONS + person * 4 + MIANOWNIK_UP);
           if(curr_floor == PLACE_MYSTERY_FLOOR)
             add_spk(MSG_SHOCKED_DICOVERY_MYSTERY_FLOOR);
-          else
+          else {
             add_spk(MSG_SAYS_MYSTERY_FLOOR_EXISTS);
+            set_bit_flag(targeted_nuts_flags, person);  // have SMUTNI hunt the person to send to nuthouse
+          }
           return;
         }
       }
@@ -1523,17 +1608,20 @@ void communicate_nuts() {
 
 void migrate_objs() {
   char person;
-  char place;
+  char guilt_reason;
   char other_person;
   for(person = 0; person < NUM_PERSONS; person++) {
-      if((place = person_loc(person)) == PLACE_CABIN) {  // !!! consider renaming person_loc() and getting rid of is_at_place()
+      if(person_loc(person) == PLACE_CABIN) {  // !!! consider renaming person_loc() and getting rid of is_at_place()
         // person in cabin
         if(hospitalized_person == -2) {
           hospitalize(person);  // it also changes hospitalized_person to person id
         }
         else
-        if(curr_floor == PLACE_GROUND_FLOOR && is_guilty(person) && smutni_target == person) {
-          remove_person(person);
+        if(curr_floor == PLACE_GROUND_FLOOR && (guilt_reason = is_guilty(person, true))) {
+          switch(guilt_reason) {  // has official papers tracked to herself
+            case ITEM_WYROK: remove_person(person); break;
+            case ITEM_MADHOUSE_CALL: close_in_madhouse(person); break;
+          }
         }
         else
         if(want_to_exit(person))
@@ -1548,7 +1636,7 @@ void migrate_objs() {
       */
   }
   for(person = 0; person < NUM_PERSONS; person++) {
-      if((place = person_loc(person)) == curr_floor) {   // !!! consider renaming person_loc() and getting rid of is_at_place()
+      if(person_loc(person) == curr_floor) {   // !!! consider renaming person_loc() and getting rid of is_at_place()
         // person not in cabin
         if(!is_bit_flag(exiting_flags, person) && want_to_enter(person))
           enter_lift(person);
@@ -1611,11 +1699,19 @@ char just_exited(char person) {
       return true;
   return false;
 }
-char get_next_target() {
+char get_next_target(char item) {
   for(char person=0; person < NUM_PERSONS; person++) {
-    if(person_loc(person) > -1 && 
-       is_bit_flag(targeted_person_flags, person)) {
-      return person;
+    if(person_loc(person) > -1) {      // possible target is in the building
+       switch(item) {
+         case ITEM_WYROK: 
+           if(is_bit_flag(targeted_person_flags, person))
+             return person;
+           break;
+         case ITEM_MADHOUSE_CALL:
+           if(is_bit_flag(targeted_nuts_flags, person))
+             return person;
+         break;
+       }
     }
   }
   return -1;
@@ -1692,24 +1788,62 @@ void proceed_after_migration() {
       clear_bit_flag(&plot_flags, LIMITS_APPLY_FLAG);  // gvmt orders ignoring weight limit of the lift
   }
 
+/*
   if(smutni_target >= 0 &&  // smutni maja kogos na celowniku; szukaja kogos
-     (person_loc(PERSON_SMUTNI) == person_loc(smutni_target)) &&    // smutni i ich target sa na tym samym pietrze  // !!! consider renaming person_loc() and getting rid of is_at_place()
-     is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI) {  // smutni mają przy sobie wyrok
-    hand_item_to_other_person(NUM_PERSONS + ITEM_WYROK, smutni_target);  // smutni dają nakaz targetowi
-  }
+     (person_loc(PERSON_SMUTNI) == person_loc(smutni_target))) {    // smutni i ich target sa na tym samym pietrze  // !!! consider renaming person_loc() and getting rid of is_at_place()
+     //if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI)  // smutni mają przy sobie wyrok
+     hand_item_to_other_person(NUM_PERSONS + is_guilty(PERSON_SMUTNI, false), smutni_target);  // smutni dają targetowi cokolwiek maj (wyrok, wariatkowo itp)
+     /*
+       hand_item_to_other_person(NUM_PERSONS + ITEM_WYROK, smutni_target);  // smutni dają nakaz targetowi
+     else if (is_item_on_person(NUM_PERSONS + ITEM_MADHOUSE_CALL) == PERSON_SMUTNI)  // smutni mają przy sobie wyrok
+       hand_item_to_other_person(NUM_PERSONS + ITEM_MADHOUSE_CALL, smutni_target);  // smutni dają nakaz targetowi
+     */
+//  }
+  // above is generalized by trackers to any person tracking any other person with any item
+  check_trackers();
 
   // wpisz na sile usunietych z windy na liste targetow
   targeted_person_flags |= forced_exiting_flags;
 
+/*
   if((just_exited(PERSON_SMUTNI) || person_loc(PERSON_SMUTNI) <= PLACE_GROUND_FLOOR) && // smutni wlasnie wyszli z windy lub sa poza budynkiem
      curr_floor == PLACE_GROUND_FLOOR &&        // jestesmy na parterze
      smutni_target == -1 &&                     // smutni nie maja w tej chwili targetu
      targeted_person_flags &&                   // jacys ludzie podpadli wladzy
-     person_loc(NUM_PERSONS + ITEM_WYROK) == PLACE_GROUND_FLOOR) {  // wyrok mozna podniesc na parterze   // !!! consider renaming person_loc() and getting rid of is_at_place()
+     person_loc(NUM_PERSONS + ITEM_WYROK) == PLACE_GROUND_FLOOR) {  // wyrok do wziecia lezy na parterze   // !!! consider renaming person_loc() and getting rid of is_at_place()
     smutni_target = get_next_target();          // smutni dostają target do schwytania
     pick_item(PERSON_SMUTNI, NUM_PERSONS + ITEM_WYROK);       // smutni podnoszą wyrok
     lift_obj[PERSON_SMUTNI] = PLACE_GROUND_FLOOR;             // smutni wracają na parter, nawet jeśli byli poza budynkiem
   }
+*/
+  // above redesigned for trackers
+  if(person_loc(PERSON_SMUTNI) == person_loc(NUM_PERSONS + ITEM_WYROK)) { // na tym samym pietrze co SMUTNI lezy WYROK
+    if(is_item_tracked(ITEM_WYROK) == -1) {  // jesli jest in blanco, to smutni szukaja czy sa targety na wyrok
+      if((person = get_next_target(ITEM_WYROK)) > -1) {  // jesli sa to tworza nowy tracker z wyrokiem
+        pick_item(PERSON_SMUTNI, NUM_PERSONS + ITEM_WYROK);
+        add_tracker(ITEM_WYROK, person);
+      }
+    }
+  }
+  else
+  if(person_loc(PERSON_SMUTNI) == person_loc(NUM_PERSONS + ITEM_MADHOUSE_CALL)) { // na tym samym pietrze co SMUTNI lezy MADHOUSE_CALL
+    if(is_item_tracked(ITEM_MADHOUSE_CALL) == -1) {  // jesli jest in blanco, to smutni szukaja czy sa targety na wyrok
+      if((person = get_next_target(ITEM_MADHOUSE_CALL)) > -1) {  // jesli sa to tworza nowy tracker z wyrokiem
+        pick_item(PERSON_SMUTNI, NUM_PERSONS + ITEM_MADHOUSE_CALL);
+        add_tracker(ITEM_MADHOUSE_CALL, person);
+      }
+    }
+  }
+  else
+  if(person_loc(PERSON_SMUTNI) == person_loc(NUM_PERSONS + ITEM_WEZWANIE)) { // na tym samym pietrze co SMUTNI lezy ITEM_WEZWANIE
+    if(is_item_tracked(ITEM_WEZWANIE) == -1) {  // jesli jest in blanco, to smutni szukaja czy sa targety na wyrok
+      if((person = get_next_target(ITEM_WEZWANIE)) > -1) {  // jesli sa to tworza nowy tracker z wyrokiem
+        pick_item(PERSON_SMUTNI, NUM_PERSONS + ITEM_WEZWANIE);
+        add_tracker(ITEM_WEZWANIE, person);
+      }
+    }
+  }
+  
 
 /*
   if(just_entered(PERSON_SPY))
