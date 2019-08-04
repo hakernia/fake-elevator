@@ -727,7 +727,7 @@ char person_spy = PERSON_SPY;
 
 unsigned long plot_flags = 0;
 unsigned long nuts_person_flags = 0;     // saw 11th floor
-unsigned long targeted_nuts_flags = 0;   // talked about 11th floor; these are randomly selected by SMUTNI to madhouse
+unsigned long targeted_nuts_flags = 22; // debug 0;   // talked about 11th floor; these are randomly selected by SMUTNI to madhouse
 unsigned long unhappy_person_flags = 0;  // could not get in to lift
 unsigned long rejected_person_flags = 0; // rejected from lift by SREBRNY, so criminals
 unsigned long targeted_person_flags = 0; // these are randomly selected by SMUTNI to prison
@@ -807,7 +807,7 @@ char lift_obj[NUM_PERSONS + NUM_ITEMS] =
 char people_on_board;
 char max_people_on_board;
 char hospitalized_person;
-char removed_person;
+char imprisoned_person;
 char escorted_to_madhouse;
 char rozsadek_rzadu = 3;   // !!! make it bigger?; declines with rejections of smutni
 char smutni_target = -1;   // noone on target, noone to madhouse; !!! wywalic
@@ -817,7 +817,7 @@ char person_loc(char person) {
 }
 
 
-
+// start of trackers
 #define MAX_TRACKERS 2
 char track_target[MAX_TRACKERS] = {-1,-1};
 char track_item[MAX_TRACKERS] = {-1, -1};
@@ -868,7 +868,7 @@ char is_item_tracked(char item) {
   }
   return -1;
 }
-
+// end of trackers
 
 
 //char exiting[NUM_PERSONS];
@@ -906,7 +906,7 @@ void move_item_floor_to_floor(char item, char to_floor) {
 
 // uses curr_floor
 void hospitalize(char person) {
-  lift_obj[person] = -1;        // -1 - cemetery
+  lift_obj[person] = -1;        // -1 - hospital or cemetery
   hospitalized_person = person;
   people_on_board--;
 }
@@ -923,21 +923,20 @@ char is_guilty(char person, char own_only) {
       return ITEM_WEZWANIE;
   return 0;
 }
-void remove_person(char person) {
+void imprison_person(char person) {
   //drop_items(person);  // let she drop ITEM_WYROK only
   //drop_item(NUM_PERSONS + ITEM_WYROK);
-  lift_obj[NUM_PERSONS + ITEM_WYROK] = 0;
+  lift_obj[NUM_PERSONS + ITEM_WYROK] = 0;  // drop WYROK, but do not communicate it (it is internal mechanics stuff)
   lift_obj[person] = -2;       // -2 - prison
-  removed_person = person;
+  imprisoned_person = person;
   people_on_board--;
   remove_tracker(ITEM_WYROK);
 }
-void close_in_madhouse(char person) {
+void escort_to_madhouse(char person) {
   lift_obj[NUM_PERSONS + ITEM_MADHOUSE_CALL] = 0;
   lift_obj[person] = -3;       // -3 - madhouse
   escorted_to_madhouse = person;
   people_on_board--;
-  //smutni_target = -1;
   remove_tracker(ITEM_MADHOUSE_CALL);
 }
 
@@ -981,7 +980,7 @@ void close_in_madhouse(char person) {
 #define MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA  94
 #define MSG_DOBRA_ZMIANA_IGNOR_LIMITOW  95
 #define MSG_NIESTETY            96
-#define MSG_WYPROWADZAJA        97
+#define MSG_WYPROWADZAJA        97  // aresztuja
 #define MSG_HANDING             98
 #define MSG_SMUTNI_CHCA_ZNALEZC 99
 
@@ -991,6 +990,7 @@ void close_in_madhouse(char person) {
 #define MSG_UCIESZY_SIE        230  // for reporting "na kogo"
 #define MSG_WOLAND_INTRO       231
 #define MSG_DROPPING            98 // DEBUG!!!, docelowo ma byc 232
+#define MSG_WYWOZA_DO_PSYCHIATRYKA 233
 
 // communicate_list(rejected_person_flags, MSG_NIESTETY, MSG_OFFS_PERSONS, MSG_NIE_WPUSZCZONY, MSG_NIE_WPUSZCZENI);
 
@@ -1020,38 +1020,6 @@ void communicate_list(unsigned long list_flags,      // rejected_person_flags
     add_spk(MSG_OFFS_PERSONS + next_set_flag(list_flags, ff) * 4 + (msg_tail_plural < 0 ? MIANOWNIK_DOWN : MIANOWNIK_UP));
     add_spk(msg_tail_plural);
   }
-/*
-  
-  char last_item = -1;
-  for(char item = 0; item < 32; item++) {
-    if(list_flags & 1UL) {
-      item_count++;
-      if(item_count == 1) {
-        add_spk(msg_head);
-      }
-      add_spk(msg_offs + item * 4 + MIANOWNIK_UP);
-      last_item = item;
-    }
-    list_flags >>= 1;
-  }
-  if(item_count == 0)
-    return;
-  if(item_count == 1)
-    add_spk(msg_tail);
-  else {
-    chg_spk(MSG_I + random(2));
-    add_spk(msg_offs + last_item * 4 + MIANOWNIK_UP);
-    add_spk(++msg_tail);  // ++ -> plural
-  }
-
-  if(is_bit_flag(rejected_person_flags, PERSON_SMUTNI)) {
-    add_spk(MSG_SMUTNI_RAPORTUJA_UTRUDNIENIA);
-  }
-  if(rozsadek_rzadu == 1) {
-    add_spk(MSG_DOBRA_ZMIANA_IGNOR_LIMITOW);
-    rozsadek_rzadu = 0;  // do not inform again
-  }    
-*/
 }
 
 
@@ -1062,32 +1030,17 @@ void communicate_exits() {
     add_spk(MSG_WYNOSZA);
     add_spk(MSG_OFFS_PERSONS + hospitalized_person * 4 + BIERNIK_PERSONS);
   }
-  if(removed_person > -1) {
+  if(imprisoned_person > -1) {
     add_spk(MSG_WYPROWADZAJA);
-    add_spk(MSG_OFFS_PERSONS + removed_person * 4 + BIERNIK_PERSONS);
-//    communicate_dropped(removed_person);  // the person drops whatever it had
+    add_spk(MSG_OFFS_PERSONS + imprisoned_person * 4 + BIERNIK_PERSONS);
+//    communicate_dropped(imprisoned_person);  // the person drops whatever it had
+  }
+  if(escorted_to_madhouse > -1) {
+    add_spk(MSG_WYWOZA_DO_PSYCHIATRYKA);
+    add_spk(MSG_OFFS_PERSONS + imprisoned_person * 4 + BIERNIK_PERSONS);
   }
 
   communicate_list(exiting_flags, MSG_Z_WINDY_WYSIADA, MSG_Z_WINDY_WYSIADAJA, MSG_OFFS_PERSONS, -1, -1); // persons, head, head plural, pers offset, tail, tail plural
-/*
-  if(ex_count == 0)
-    return;
-  if(ex_count == 1) {
-    add_spk(MSG_Z_WINDY_WYSIADA);
-    //add_spk(MSG_OFFS_PERSONS + exiting[0] * 4 + MIANOWNIK_DOWN);
-    add_spk(MSG_OFFS_PERSONS + next_set_flag(exiting_flags, 0) * 4 + MIANOWNIK_DOWN);
-  }
-  else {
-    add_spk(MSG_Z_WINDY_WYSIADAJA);
-    for(ff=0; ff<ex_count-1; ff++) {
-      //add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_UP);
-      add_spk(MSG_OFFS_PERSONS + next_set_flag(exiting_flags, ff) * 4 + MIANOWNIK_UP);
-    }
-    add_spk(MSG_I + random(2));
-    //add_spk(MSG_OFFS_PERSONS + exiting[ff] * 4 + MIANOWNIK_DOWN);
-    add_spk(MSG_OFFS_PERSONS + next_set_flag(exiting_flags, ff) * 4 + MIANOWNIK_DOWN);
-  }
-*/
 }
 //char entering[NUM_PERSONS];
 char ent_count;
@@ -1107,26 +1060,6 @@ void communicate_entries() {
     add_spk(MSG_WOLAND_INTRO);
     set_bit_flag(&plot_flags, WOLAND_INTRO_DONE);
   }
-/*
-  char ff;
-  if(ent_count == 0)
-    return;
-  if(ent_count == 1) {
-    add_spk(MSG_WSIADA);
-    //add_spk(MSG_OFFS_PERSONS + entering[0] * 4 + MIANOWNIK_DOWN);
-    add_spk(MSG_OFFS_PERSONS + next_set_flag(entering_flags, 0) * 4 + MIANOWNIK_DOWN);
-  }
-  else {
-    add_spk(MSG_WSIADAJA);
-    for(ff=0; ff<ent_count-1; ff++) {
-      //add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_UP);
-      add_spk(MSG_OFFS_PERSONS + next_set_flag(entering_flags, ff) * 4 + MIANOWNIK_UP);
-    }
-    add_spk(MSG_I + random(2));
-    //add_spk(MSG_OFFS_PERSONS + entering[ff] * 4 + MIANOWNIK_DOWN);
-    add_spk(MSG_OFFS_PERSONS + next_set_flag(entering_flags, ff) * 4 + MIANOWNIK_DOWN);
-  }
-*/
 }
 
 
@@ -1233,7 +1166,7 @@ void clear_lift_world_queues() {
   memset(receiver, 0, sizeof(receiver));
   hand_count = 0;
   hospitalized_person = -1;  // -1 - noone to hospitalize, -2 - hospitalize someone in lift
-  removed_person = -1;
+  imprisoned_person = -1;
   escorted_to_madhouse = -1;
   rejected_person_flags = 0;
 }
@@ -1305,23 +1238,13 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
       // if have nakaz, do not leave on parter
       // else if target is here, do not leave
       // else leave 30%
-/*      if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == PERSON_SMUTNI ||
-         is_item_on_person(NUM_PERSONS + ITEM_MADHOUSE_CALL) == PERSON_SMUTNI ||
-         is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == PERSON_SMUTNI)
-*/
       if(is_guilty(PERSON_SMUTNI, false)) {  // !!! consider changing name is_guilty() on has_official_papers() etc.
         // smutni maja przy sobie jakis wyrok lub nakaz
         if(curr_floor == PLACE_GROUND_FLOOR) {
           return false;    // no exit on ground floor if have doc to deliver
         }
         else {
-          /*
-          if(smutni_target > -1 &&
-             person_loc(smutni_target) == curr_floor) {  // !!! consider renaming person_loc() and getting rid of is_at_place()
-            // target jest na tym pietrze, wysiadamy do niego
-            return true;
-          */
-            return my_target_is_here(PERSON_SMUTNI, curr_floor);
+            return my_target_is_here(PERSON_SMUTNI, curr_floor);     // target jest na tym pietrze, wysiadamy do niego
         }
       } else {
         // no paper to deliver; exit at ground floor
@@ -1334,11 +1257,6 @@ char want_to_exit(char person) {  // equal to idx in lift_obj[]!
 
   // wszyscy z nakazem, poza smutnymi, wysiadają tylko na parterze
   if(person != PERSON_SMUTNI) {
-    /*
-    if(is_item_on_person(NUM_PERSONS + ITEM_WYROK) == person ||
-       is_item_on_person(NUM_PERSONS + ITEM_MADHOUSE_CALL) == person ||
-       is_item_on_person(NUM_PERSONS + ITEM_WEZWANIE) == person) 
-    */
     if(is_guilty(person, true)) {  // person has official papers tracked to her
         // ma doręczony nakaz, wyrok, wezwanie; wiec wysiada tylko na parterze
       if(curr_floor == PLACE_GROUND_FLOOR)
@@ -1619,8 +1537,8 @@ void migrate_objs() {
         else
         if(curr_floor == PLACE_GROUND_FLOOR && (guilt_reason = is_guilty(person, true))) {
           switch(guilt_reason) {  // has official papers tracked to herself
-            case ITEM_WYROK: remove_person(person); break;
-            case ITEM_MADHOUSE_CALL: close_in_madhouse(person); break;
+            case ITEM_WYROK: imprison_person(person); break;
+            case ITEM_MADHOUSE_CALL: escort_to_madhouse(person); break;
           }
         }
         else
@@ -1728,7 +1646,6 @@ void proceed_after_migration() {
 
   if(just_entered(PERSON_ANUSZKA)) {
     set_bit_flag(&plot_flags, ALT_FLOOR_ANNOUNCEMENTS); // make anuszka announce floors from now on
-    //alt_floor_announcements = MSG_ALT_FLOOR_ANUSZKA;
   }
 
   // there was a crash and anuszka was in it and she had an oil
@@ -1742,6 +1659,27 @@ void proceed_after_migration() {
   }
      
   // ania na 6 pietrze zostawia olej, a na innych pietrach go bierze
+  
+  if(just_exited(PERSON_ANIA))
+    person = PERSON_ANIA;
+  else
+  if(just_exited(PERSON_ANUSZKA))
+    person = PERSON_ANUSZKA;
+  else
+    person = -1;
+
+  if(person > -1) {
+    // ania/anuszka takes the oil if it is not on 6th floor
+     if(curr_floor != 6) {
+       if(person_loc(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == curr_floor)   // !!! consider renaming person_loc() and getting rid of is_at_place()
+         pick_item(person, NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
+     } else {
+       if(is_item_on_person(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY) == person)
+         drop_item(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
+     }
+  }
+
+  /*
   if(just_exited(PERSON_ANIA)) {
     // anuszka takes the oil if it is not on 6th floor
      if(curr_floor != 6) {
@@ -1763,6 +1701,7 @@ void proceed_after_migration() {
          drop_item(NUM_PERSONS + ITEM_OLEJ_SLONECZNIKOWY);
      }
   }
+  */
 
   if(curr_floor == PLACE_MYSTERY_FLOOR)
   for(person = 0; person < NUM_PERSONS; person++) {
@@ -1805,23 +1744,15 @@ void proceed_after_migration() {
   // wpisz na sile usunietych z windy na liste targetow
   targeted_person_flags |= forced_exiting_flags;
 
-/*
-  if((just_exited(PERSON_SMUTNI) || person_loc(PERSON_SMUTNI) <= PLACE_GROUND_FLOOR) && // smutni wlasnie wyszli z windy lub sa poza budynkiem
-     curr_floor == PLACE_GROUND_FLOOR &&        // jestesmy na parterze
-     smutni_target == -1 &&                     // smutni nie maja w tej chwili targetu
-     targeted_person_flags &&                   // jacys ludzie podpadli wladzy
-     person_loc(NUM_PERSONS + ITEM_WYROK) == PLACE_GROUND_FLOOR) {  // wyrok do wziecia lezy na parterze   // !!! consider renaming person_loc() and getting rid of is_at_place()
-    smutni_target = get_next_target();          // smutni dostają target do schwytania
-    pick_item(PERSON_SMUTNI, NUM_PERSONS + ITEM_WYROK);       // smutni podnoszą wyrok
-    lift_obj[PERSON_SMUTNI] = PLACE_GROUND_FLOOR;             // smutni wracają na parter, nawet jeśli byli poza budynkiem
-  }
-*/
-  // above redesigned for trackers
+
+  // SMUTNI check their place for in blanco WYROK, ITEM_MADHOUSE_CALL or WEZWANIE
+  // If they find it, they look for targets of possible document
+  // If they find target, the doc is taken tracker document-target is created for it
   if(person_loc(PERSON_SMUTNI) == person_loc(NUM_PERSONS + ITEM_WYROK)) { // na tym samym pietrze co SMUTNI lezy WYROK
     if(is_item_tracked(ITEM_WYROK) == -1) {  // jesli jest in blanco, to smutni szukaja czy sa targety na wyrok
       if((person = get_next_target(ITEM_WYROK)) > -1) {  // jesli sa to tworza nowy tracker z wyrokiem
-        pick_item(PERSON_SMUTNI, NUM_PERSONS + ITEM_WYROK);
-        add_tracker(ITEM_WYROK, person);
+        pick_item(PERSON_SMUTNI, NUM_PERSONS + ITEM_WYROK);  // biora do reki wyrok
+        add_tracker(ITEM_WYROK, person);     // i dodaja tracker, by wyrok nie byl in blanco
       }
     }
   }
